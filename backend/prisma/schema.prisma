@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  GENERALTRAINER
+  PERSONALTRAINER
+  MEMBER
+  HOUSEKEEPING
+  RECEPTIONIST
+}
+
+// Staff Role model for dynamic role management
+model StaffRole {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  staff Staff[]
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+// User model for authentication and role management
+model User {
+  id        Int      @id @default(autoincrement())
+  firstName String
+  lastName  String
+  email     String   @unique
+  password  String // Hashed password
+  role      Role     @default(MEMBER)
+  branchId  Int?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  adminBranches  Branch[] @relation("BranchAdmin")
+  managedMembers Member[] @relation("StaffMembers")
+  managedStaff   Staff[]  @relation("StaffManager")
+  createdStaff   Staff[]  @relation("StaffCreator")
+}
+
+// Branch model for gym branches
+model Branch {
+  id           Int          @id @default(autoincrement())
+  name         String
+  code         String       @unique
+  address      String
+  phone        String?
+  email        String?
+  status       BranchStatus @default(INACTIVE)
+  hours        Json
+  branch_image String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // Relations
+  adminId Int
+  admin   User     @relation("BranchAdmin", fields: [adminId], references: [id])
+  users   User[]
+  staff   Staff[]
+  members Member[]
+  plans   MembershipPlan[]
+}
+
+// Staff model for staff management
+model Staff {
+  id                      Int       @id @default(autoincrement())
+  userId                  Int       @unique
+  user                    User      @relation("StaffManager", fields: [userId], references: [id])
+  branchId                Int
+  branch                  Branch    @relation(fields: [branchId], references: [id])
+  roleId                  Int
+  role                    StaffRole @relation(fields: [roleId], references: [id])
+  staff_id                String    @unique
+  gender                  String?
+  dob                     DateTime?
+  phone                   String?
+  profile_photo           String?
+  status                  String    @default("Active")
+  join_date               DateTime
+  exit_date               DateTime?
+  salary_type             String? // "Fixed" or "Hourly"
+  hourly_rate             Float?
+  fixed_salary            Float?
+  commission_rate_percent Float     @default(0)
+  login_enabled           Boolean   @default(false)
+  username                String?
+  password                String? // Hashed password for staff login
+  createdById             Int // ID of the user who created this staff record
+  createdBy               User      @relation("StaffCreator", fields: [createdById], references: [id])
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  // Relations
+  managedMembers Member[] @relation("StaffMembers")
+}
+
+// Member model for gym members
+model Member {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation("StaffMembers", fields: [userId], references: [id])
+  branchId  Int
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  staffId   Int?
+  staff     Staff?   @relation("StaffMembers", fields: [staffId], references: [id])
+  phone     String?
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+}
+
+// Membership Plan model for gym membership plans
+model MembershipPlan {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  durationDays Int
+  priceCents   Int
+  currency     String   @default("INR")
+  features     Json     // Array of feature strings
+  status       String   @default("Active")
+  branchId     Int?
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+}
+
+// Subscription model for member subscriptions
+model Subscription {
+  id        Int             @id @default(autoincrement())
+  memberId  Int
+  member    Member          @relation(fields: [memberId], references: [id])
+  planId    Int
+  plan      MembershipPlan  @relation(fields: [planId], references: [id])
+  startDate DateTime
+  endDate   DateTime
+  status    String          @default("Active") // Active, Expired, Cancelled
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}

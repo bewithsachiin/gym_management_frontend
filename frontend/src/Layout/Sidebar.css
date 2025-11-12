@@ -1,0 +1,142 @@
+.sidebar-container {
+  width: 260px;
+  background-color: #2f6a87;
+  min-height: 100vh;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  
+}
+
+.sidebar-container.collapsed {
+  width: 70px;
+}
+
+.sidebar {
+  padding: 0;
+  margin: 0;
+}
+
+.menu {
+  list-style: none;
+  margin: 0;
+  padding: 10px 0;
+  margin-bottom: 50px;
+}
+
+.menu-item {
+  cursor: pointer;
+  position: relative;
+}
+
+.menu-link {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px; /* This creates the gap on both sides */
+  color: white;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  position: relative;
+  
+}
+
+/* Hover Effect - Only add background when hovered/active */
+.menu-link:hover::before,
+.menu-item.active > .menu-link::before {
+  content: '';
+  position: absolute;
+  left: 10px; /* Start after left padding */
+  top: 0;
+  bottom: 0;
+  width: 240px; 
+  background-color: #6EB2CC;
+  border-radius: 8px;
+  z-index: -1;
+  color: white;
+
+
+}
+
+
+
+/* Active State */
+.menu-item.active > .menu-link {
+  /* background-color: transparent; */
+  color: white;
+  font-weight: 600;
+}
+
+.menu-icon {
+  font-size: 16px;
+  margin-right: 12px;
+  min-width: 20px;
+  opacity: 0.9;
+}
+
+.menu-text {
+  flex-grow: 1;
+  font-weight: 500;
+  font-size: 17px;
+  transition: all 0.3s ease;
+}
+
+.arrow-icon {
+  transition: transform 0.3s ease;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.arrow-icon.rotate {
+  transform: rotate(180deg);
+}
+
+.submenu {
+  /* background-color: #0e182c; */
+  padding-left: 45px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.submenu-item {
+  padding: 10px 0;
+  font-size: 16px;
+  font-weight: 400;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  position: relative;
+  
+}
+
+.submenu-item:hover::before,
+.submenu-item.active-sub::before {
+  content: '';
+  position: absolute;
+  /* padding: 15px 20px; */
+  right:  10px;
+  top: 0;
+  bottom: 0;
+  /* margin-bottom: 10px; */
+  width: 220px; 
+  background-color: #6EB2CC;
+  border-radius: 4px;
+  z-index: -1;
+  
+
+}
+
+.submenu-item:hover,
+.submenu-item.active-sub {
+  color: #ffffff;
+  font-weight: 500;
+  background-color: transparent;
+  border-radius: 4px;
+}
+
