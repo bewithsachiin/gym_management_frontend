@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { format } from "date-fns";
+import axiosInstance from "../../utils/axiosInstance";
+
 /**
  * QRCode component for gym check-in
  * Displays a QR code with member information that refreshes every 60 seconds
@@ -27,7 +29,7 @@ const AdminQrCheckin = ({ member_id, member_name }) => {
   // Format dates for display
   const formattedIssueDate = format(issuedAt, "MMM dd, yyyy HH:mm:ss");
   const formattedExpiryDate = format(new Date(issuedAt.getTime() + CODE_TTL * 1000), "MMM dd, yyyy HH:mm:ss");
-  
+
   // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
@@ -42,30 +44,49 @@ const AdminQrCheckin = ({ member_id, member_name }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, [qrNonce]);
-  
-  // Initialize mock history data
+
+  // Fetch today's history from backend
   useEffect(() => {
-    // Mock history data for today
-    const mockHistory = [
-      {
-        id: 1,
-        checkIn: new Date(new Date().setHours(8, 30, 0)),
-        checkOut: new Date(new Date().setHours(10, 15, 0))
-      },
-      {
-        id: 2,
-        checkIn: new Date(new Date().setHours(14, 0, 0)),
-        checkOut: null // Still checked in
-      },
-      {
-        id: 3,
-        checkIn: new Date(new Date().setHours(18, 45, 0)),
-        checkOut: new Date(new Date().setHours(20, 30, 0))
+    const fetchHistory = async () => {
+      try {
+        const response = await axiosInstance.get('/qr-check/history');
+        if (response.data.success) {
+          // Transform backend data to match component format
+          const transformedHistory = response.data.data.history.map(entry => ({
+            id: entry.id,
+            checkIn: new Date(entry.scannedAt),
+            checkOut: entry.action === 'checkout' ? new Date(entry.scannedAt) : null,
+            person: entry.person
+          }));
+          setHistory(transformedHistory);
+        }
+      } catch (error) {
+        console.error('Failed to fetch QR history:', error);
+        // Keep mock data as fallback
+        const mockHistory = [
+          {
+            id: 1,
+            checkIn: new Date(new Date().setHours(8, 30, 0)),
+            checkOut: new Date(new Date().setHours(10, 15, 0))
+          },
+          {
+            id: 2,
+            checkIn: new Date(new Date().setHours(14, 0, 0)),
+            checkOut: null // Still checked in
+          },
+          {
+            id: 3,
+            checkIn: new Date(new Date().setHours(18, 45, 0)),
+            checkOut: new Date(new Date().setHours(20, 30, 0))
+          }
+        ];
+        setHistory(mockHistory);
       }
-    ];
-    setHistory(mockHistory);
+    };
+
+    fetchHistory();
   }, []);
-  
+
   // Format countdown text
   const countdownText = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`;
   

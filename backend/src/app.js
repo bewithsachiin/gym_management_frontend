@@ -41,12 +41,14 @@ const staffRoutes = require('./routes/staffRoutes');
 const staffRoleRoutes = require('./routes/staffRoleRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const planRoutes = require('./routes/planRoutes');
+const qrCheckRoutes = require('./routes/qrCheckRoutes');
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/branches', branchRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/staff-roles', staffRoleRoutes);
 app.use('/api/v1/members', memberRoutes);
 app.use('/api/v1/plans', planRoutes);
+app.use('/api/v1/qr-check', qrCheckRoutes);
 
 // ✅ Health check route
 app.get('/api/health', (req, res) => {
