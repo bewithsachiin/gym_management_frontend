@@ -1,4 +1,4 @@
-git commit -m "first commit"const bcrypt = require('bcrypt');
+const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const prisma = require('../config/db');
 const { generateToken } = require('../utils/jwt');

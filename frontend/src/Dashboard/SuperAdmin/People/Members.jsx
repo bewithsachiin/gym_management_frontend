@@ -605,6 +605,10 @@ const Members = () => {
                                             <input type="email" name="email" className="form-control rounded-3" required />
                                         </div>
                                         <div className="col-md-6">
+                                            <label className="form-label">Password *</label>
+                                            <input type="password" name="password" className="form-control rounded-3" required />
+                                        </div>
+                                        <div className="col-md-6">
                                             <label className="form-label">Mobile Number</label>
                                             <input type="tel" name="phone" className="form-control rounded-3" />
                                         </div>
