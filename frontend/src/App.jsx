@@ -1,8 +1,8 @@
 import { Route, Routes, useLocation } from "react-router-dom";
 import "./App.css";
 import { useState, useEffect } from "react";
-import * as echarts from "echarts";
 import { UserProvider } from "./UserContext";
+import * as echarts from "echarts";
 
 
 import Navbar from "./Layout/Navbar";
@@ -82,7 +82,7 @@ import RoleManagement from "./Dashboard/Admin/Settings/RoleManagement";
 
 import SuperAdminDashbaord from "./Dashboard/SuperAdmin/SuperAdminDashbaord";
 import SuperAdminBranches from "./Dashboard/SuperAdmin/SuperAdminBranches";
-import Plans from "./Dashboard/SuperAdmin/MembershipPlans";
+import Plans from "./Dashboard/SuperAdmin/Plans";
 import Marketing from "./Dashboard/SuperAdmin/Marketing";
 import Staff from "./Dashboard/SuperAdmin/People/Staff";
 import Members from "./Dashboard/SuperAdmin/People/Members";
@@ -128,7 +128,8 @@ function App() {
 
 
   return (
-    <UserProvider>
+    <>
+      <UserProvider>
       {hideLayout ? (
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -327,6 +328,7 @@ function App() {
         </>
       )}
     </UserProvider>
+    </>
   );
 }
 

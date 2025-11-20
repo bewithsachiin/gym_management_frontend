@@ -1,68 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { FaBell, FaUserCircle, FaBars } from "react-icons/fa";
+import { useUser } from "../UserContext";
 
 const Navbar = ({ toggleSidebar }) => {
+  const { user } = useUser();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+
   const dropdownRef = useRef();
 
-  // ✅ Profile state
-  const [profile, setProfile] = useState({
-    name: "",
-    email: "",
-    phone: "+91 90000 00000",
-    role: "",
-    branch: "",
-    notifyEmail: true,
-    notifySMS: false,
-  });
-
-  // ✅ Load profile data dynamically from localStorage
-  useEffect(() => {
-    const loadProfileFromLocalStorage = () => {
-      try {
-        const userDetails = localStorage.getItem("userDetails");
-        const userRole = localStorage.getItem("userRole");
-        const userEmail = localStorage.getItem("userEmail");
-        const branchId = localStorage.getItem("branchId");
-
-        if (userDetails) {
-          const parsedUserDetails = JSON.parse(userDetails);
-
-          setProfile((prev) => ({
-            ...prev,
-            name: parsedUserDetails?.name || prev.name,
-            email: userEmail || parsedUserDetails?.email || prev.email,
-            role: userRole || parsedUserDetails?.role || prev.role,
-            branch: branchId
-              ? `Branch ${branchId}`
-              : parsedUserDetails?.branch || prev.branch,
-          }));
-        }
-      } catch (error) {
-        console.error("Error reading userDetails from localStorage:", error);
-      }
-    };
-
-    loadProfileFromLocalStorage();
-
-    // ✅ Update profile automatically when localStorage changes (after login/logout)
-    const handleStorageChange = (event) => {
-      if (
-        ["userDetails", "userRole", "userEmail", "branchId"].includes(event.key)
-      ) {
-        loadProfileFromLocalStorage();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
-  }, []);
-
-  // ✅ Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -73,21 +19,35 @@ const Navbar = ({ toggleSidebar }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Prevent scroll when profile modal is open
+  // prevent background scroll when modal open
   useEffect(() => {
     document.body.style.overflow = showProfileModal ? "hidden" : "unset";
     return () => (document.body.style.overflow = "unset");
   }, [showProfileModal]);
 
-  // ✅ Mock Save Profile (future API integration)
   const handleSaveProfile = () => {
-    alert("Profile saved successfully!");
+    // TODO: call API to save
+    alert("Profile saved!");
     setShowProfileModal(false);
+  };
+
+  // Profile data from user context
+  const profile = user ? {
+    name: user.name || "N/A",
+    email: user.email || "N/A",
+    phone: user.phone || "N/A",
+    role: user.role || "N/A",
+    branch: user.branch || "N/A",
+  } : {
+    name: "Guest",
+    email: "",
+    phone: "",
+    role: "",
+    branch: "",
   };
 
   return (
     <>
-      {/* ---------------- NAVBAR ---------------- */}
       <nav
         className="navbar navbar-expand px-3 py-2 d-flex justify-content-between align-items-center fixed-top"
         style={{
@@ -95,8 +55,8 @@ const Navbar = ({ toggleSidebar }) => {
           boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
         }}
       >
-        {/* Left Section */}
         <div className="d-flex align-items-center gap-3">
+          {/* Toggle Button with Custom Hover */}
           <button
             className="btn p-2"
             style={{
@@ -110,16 +70,19 @@ const Navbar = ({ toggleSidebar }) => {
             onMouseEnter={(e) => {
               e.target.style.backgroundColor = "white";
               e.target.style.color = "#000";
+              e.target.style.borderColor = "white";
             }}
             onMouseLeave={(e) => {
               e.target.style.backgroundColor = "transparent";
               e.target.style.color = "white";
+              e.target.style.borderColor = "white";
             }}
             onClick={toggleSidebar}
           >
             <FaBars color="currentColor" />
           </button>
 
+          {/* Text Logo */}
           <span
             style={{
               fontSize: "1.5rem",
@@ -129,14 +92,11 @@ const Navbar = ({ toggleSidebar }) => {
               fontFamily: "'Poppins', sans-serif",
             }}
           >
-            Gym
-            <span style={{ color: "#0d6efd", fontWeight: "800" }}>
-              Management
-            </span>
+            Gym<span style={{ color: "#0d6efd", fontWeight: "800" }}>Management</span>
           </span>
         </div>
 
-        {/* Right Section */}
+        {/* Notification and User */}
         <div className="d-flex align-items-center gap-3 position-relative">
           {/* Notification */}
           <div className="position-relative">
@@ -146,7 +106,7 @@ const Navbar = ({ toggleSidebar }) => {
             </span>
           </div>
 
-          {/* User Profile Dropdown */}
+          {/* User Profile */}
           <div className="dropdown" ref={dropdownRef}>
             <div
               className="d-flex align-items-center gap-2 cursor-pointer text-white"
@@ -156,10 +116,7 @@ const Navbar = ({ toggleSidebar }) => {
               <FaUserCircle size={24} />
               <div className="d-none d-sm-block text-white">
                 <small className="mb-0">Welcome</small>
-                <div className="fw-bold">
-                  {profile.name || "User"}{" "}
-                  {profile.role && `(${profile.role})`}
-                </div>
+                <div className="fw-bold">{user ? user.name : "Guest"}</div>
               </div>
             </div>
 
@@ -173,6 +130,7 @@ const Navbar = ({ toggleSidebar }) => {
                   maxWidth: "calc(100vw - 30px)",
                   zIndex: 1000,
                   borderRadius: "8px",
+                  overflow: "hidden",
                 }}
               >
                 <li>
@@ -190,15 +148,7 @@ const Navbar = ({ toggleSidebar }) => {
                   <hr className="dropdown-divider" />
                 </li>
                 <li>
-                  <a
-                    className="dropdown-item text-danger"
-                    href="/"
-                    onClick={() => {
-                      localStorage.clear();
-                    }}
-                  >
-                    Logout
-                  </a>
+                  <a className="dropdown-item text-danger" href="/">Logout</a>
                 </li>
               </ul>
             )}
@@ -206,7 +156,7 @@ const Navbar = ({ toggleSidebar }) => {
         </div>
       </nav>
 
-      {/* ---------------- PROFILE MODAL ---------------- */}
+      {/* PROFILE MODAL */}
       {showProfileModal && (
         <div
           className="modal fade show"
@@ -220,9 +170,10 @@ const Navbar = ({ toggleSidebar }) => {
           >
             <div className="modal-content">
               <div className="modal-header border-0 pb-0">
-                <div className="d-flex align-items-center gap-3 mb-3">
+                 <div className="d-flex align-items-center gap-3 mb-3">
                   <FaUserCircle size={48} color="#6c757d" />
-                  <h5 className="modal-title fw-bold">My Profile</h5>
+               
+                <h5 className="modal-title fw-bold">My Profile</h5>
                 </div>
                 <button
                   type="button"
@@ -232,16 +183,15 @@ const Navbar = ({ toggleSidebar }) => {
               </div>
 
               <div className="modal-body">
-                {/* Profile Form */}
+                
+
                 <div className="row g-3">
                   <div className="col-12 col-md-6">
                     <label className="form-label">Full Name</label>
                     <input
                       className="form-control"
                       value={profile.name}
-                      onChange={(e) =>
-                        setProfile({ ...profile, name: e.target.value })
-                      }
+                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                     />
                   </div>
                   <div className="col-12 col-md-6">
@@ -250,9 +200,7 @@ const Navbar = ({ toggleSidebar }) => {
                       type="email"
                       className="form-control"
                       value={profile.email}
-                      onChange={(e) =>
-                        setProfile({ ...profile, email: e.target.value })
-                      }
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                     />
                   </div>
                   <div className="col-12 col-md-6">
@@ -260,46 +208,40 @@ const Navbar = ({ toggleSidebar }) => {
                     <input
                       className="form-control"
                       value={profile.phone}
-                      onChange={(e) =>
-                        setProfile({ ...profile, phone: e.target.value })
-                      }
+                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                     />
                   </div>
                   <div className="col-12 col-md-6">
                     <label className="form-label">Branch</label>
-                    <select
-                      className="form-select"
+                    <input
+                      className="form-control"
                       value={profile.branch}
-                      onChange={(e) =>
-                        setProfile({ ...profile, branch: e.target.value })
-                      }
-                    >
-                      <option>All Branches</option>
-                      <option>Andheri</option>
-                      <option>Bandra</option>
-                      <option>Thane</option>
-                      <option>Pune</option>
-                    </select>
+                      readOnly
+                    />
                   </div>
                 </div>
 
                 <hr className="my-4" />
 
-                {/* Password Change Section */}
+                {/* Password change */}
                 <div className="row g-3">
                   <div className="col-12 col-md-4">
                     <label className="form-label">Current Password</label>
-                    <input type="password" className="form-control" />
+                    <input type="password" className="form-control" placeholder="••••••••" />
                   </div>
                   <div className="col-12 col-md-4">
                     <label className="form-label">New Password</label>
-                    <input type="password" className="form-control" />
+                    <input type="password" className="form-control" placeholder="••••••••" />
                   </div>
                   <div className="col-12 col-md-4">
                     <label className="form-label">Confirm New Password</label>
-                    <input type="password" className="form-control" />
+                    <input type="password" className="form-control" placeholder="••••••••" />
                   </div>
                 </div>
+
+                <hr className="my-4" />
+
+              
               </div>
 
               <div className="modal-footer border-0">

@@ -28,13 +28,13 @@ axiosInstance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Clear local storage and redirect to login
-      localStorage.removeItem('token');
       localStorage.removeItem('userDetails');
       localStorage.removeItem('userId');
       localStorage.removeItem('userName');
       localStorage.removeItem('userEmail');
       localStorage.removeItem('userRole');
       localStorage.removeItem('branchId');
+      localStorage.removeItem('token');
       window.location.href = '/login';
     }
     return Promise.reject(error);

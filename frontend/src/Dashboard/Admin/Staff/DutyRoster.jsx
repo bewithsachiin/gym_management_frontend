@@ -265,8 +265,7 @@ const DutyRoster = () => {
   // Handle form submission
   const handleFormSubmit = (e) => {
     e.preventDefault();
-    const form = e.target;
-    const formData = new FormData(form);
+    const formData = new FormData(e.target);
     
     if (modalType === 'add') {
       const staffId = parseInt(formData.get('staff_id'));

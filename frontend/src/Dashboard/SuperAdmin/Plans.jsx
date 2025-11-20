@@ -1,75 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FaEye, FaEdit, FaTrashAlt, FaCalendarAlt, FaTag, FaMoneyBillWave, FaStar, FaToggleOn, FaToggleOff, FaPlus } from 'react-icons/fa';
-import axiosInstance from '../../utils/axiosInstance';
 
 const MembershipPlans = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modalType, setModalType] = useState('add'); // 'add', 'edit', 'view'
   const [selectedPlan, setSelectedPlan] = useState(null);
-
+  
   // For Add Custom Feature Modal
   const [isAddFeatureModalOpen, setIsAddFeatureModalOpen] = useState(false);
   const [newFeature, setNewFeature] = useState('');
 
-  // API data states
-  const [plans, setPlans] = useState([]);
-  const [allFeatures, setAllFeatures] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Search and Filter states
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All'); // 'All', 'Active', 'Inactive'
-
-  // Fetch plans and features on component mount
-  useEffect(() => {
-    fetchPlans();
-    fetchFeatures();
-  }, []);
-
-  // API Functions
-  const fetchPlans = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await axiosInstance.get('/plans');
-      if (response.data && response.data.success) {
-        setPlans(response.data.data || []);
-      } else {
-        throw new Error(response.data?.message || 'Failed to fetch plans');
-      }
-    } catch (err) {
-      console.error('Error fetching plans:', err);
-      setError(err.response?.data?.message || err.message || 'Failed to load membership plans');
-      setPlans([]);
-    } finally {
-      setLoading(false);
+  // Sample data
+  const [plans, setPlans] = useState([
+    {
+      id: 1,
+      plan_name: "Basic Monthly",
+      plan_description: "Access to gym floor and cardio machines only.",
+      duration_days: 30,
+      price_cents: 15000, // ₹150
+      currency: "INR",
+      features: ["Cardio Access", "Locker Room"],
+      status: "Active"
+    },
+    {
+      id: 2,
+      plan_name: "Premium Annual",
+      plan_description: "Full access including group classes, sauna, and personal training.",
+      duration_days: 365,
+      price_cents: 120000, // ₹1200
+      currency: "INR",
+      features: ["Sauna", "Group Classes", "Personal Training", "Locker Room"],
+      status: "Active"
+    },
+    {
+      id: 3,
+      plan_name: "Student Plan",
+      plan_description: "Discounted access for students during off-peak hours.",
+      duration_days: 90,
+      price_cents: 30000, // ₹300
+      currency: "INR",
+      features: ["Cardio Access", "Group Classes"],
+      status: "Inactive"
     }
-  };
-
-  const fetchFeatures = async () => {
-    try {
-      const response = await axiosInstance.get('/plans/features');
-      if (response.data && response.data.success) {
-        setAllFeatures(response.data.data || []);
-      } else {
-        throw new Error('Failed to fetch features');
-      }
-    } catch (err) {
-      console.error('Error fetching features:', err);
-      // Fallback to default features if API fails
-      setAllFeatures([
-        "Sauna",
-        "Group Classes",
-        "Personal Training",
-        "Locker Room",
-        "Cardio Access",
-        "Swimming Pool"
-      ]);
-    }
-  };
+  ]);
+  
+  const [allFeatures, setAllFeatures] = useState([
+    "Sauna", 
+    "Group Classes", 
+    "Personal Training", 
+    "Locker Room", 
+    "Cardio Access", 
+    "Swimming Pool"
+  ]);
 
   const handleAddNew = () => {
     setModalType('add');
@@ -94,26 +77,13 @@ const MembershipPlans = () => {
     setIsDeleteModalOpen(true);
   };
   
-  const confirmDelete = async () => {
-    if (!selectedPlan) return;
-
-    try {
-      setSubmitting(true);
-      const response = await axiosInstance.delete(`/plans/${selectedPlan.id}`);
-      if (response.data && response.data.success) {
-        setPlans(prev => prev.filter(p => p.id !== selectedPlan.id));
-        alert(`Plan "${selectedPlan.name}" has been deleted.`);
-        setIsDeleteModalOpen(false);
-        setSelectedPlan(null);
-      } else {
-        throw new Error(response.data?.message || 'Failed to delete plan');
-      }
-    } catch (err) {
-      console.error('Error deleting plan:', err);
-      alert(err.response?.data?.message || err.message || 'Failed to delete plan. Please try again.');
-    } finally {
-      setSubmitting(false);
+  const confirmDelete = () => {
+    if (selectedPlan) {
+      setPlans(prev => prev.filter(p => p.id !== selectedPlan.id));
+      alert(`Plan "${selectedPlan.plan_name}" has been deleted.`);
     }
+    setIsDeleteModalOpen(false);
+    setSelectedPlan(null);
   };
   
   const closeModal = () => {
@@ -137,7 +107,7 @@ const MembershipPlans = () => {
     setNewFeature('');
   };
 
-  const saveNewFeature = async () => {
+  const saveNewFeature = () => {
     if (!newFeature.trim()) {
       alert("Feature name cannot be empty.");
       return;
@@ -146,69 +116,9 @@ const MembershipPlans = () => {
       alert("This feature already exists.");
       return;
     }
-
-    try {
-      // In a real implementation, you would save this to the backend
-      // For now, we'll just add it locally and show a success message
-      setAllFeatures(prev => [...prev, newFeature.trim()]);
-      alert("Feature added successfully!");
-      closeAddFeatureModal();
-    } catch (err) {
-      console.error('Error adding feature:', err);
-      alert('Failed to add feature. Please try again.');
-    }
-  };
-
-  // Handle form submission for add/edit
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-
-    const form = e.target;
-    const formData = new FormData(form);
-    const planData = {
-      name: formData.get('plan_name'),
-      description: formData.get('description') || '',
-      durationDays: parseInt(formData.get('duration_days')),
-      priceCents: Math.round(parseFloat(formData.get('price') || 0) * 100),
-      currency: 'INR',
-      features: Array.from(formData.getAll('features[]')),
-      status: formData.get('status') ? 'Active' : 'Inactive'
-    };
-
-    // Validation
-    if (!planData.name || !planData.durationDays || !planData.priceCents) {
-      alert('Please fill in all required fields.');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-
-      if (modalType === 'add') {
-        const response = await axiosInstance.post('/plans', planData);
-        if (response.data && response.data.success) {
-          await fetchPlans(); // Refresh the plans list
-          alert('Plan created successfully!');
-          closeModal();
-        } else {
-          throw new Error(response.data?.message || 'Failed to create plan');
-        }
-      } else if (modalType === 'edit' && selectedPlan) {
-        const response = await axiosInstance.put(`/plans/${selectedPlan.id}`, planData);
-        if (response.data && response.data.success) {
-          await fetchPlans(); // Refresh the plans list
-          alert('Plan updated successfully!');
-          closeModal();
-        } else {
-          throw new Error(response.data?.message || 'Failed to update plan');
-        }
-      }
-    } catch (err) {
-      console.error('Error saving plan:', err);
-      alert(err.response?.data?.message || err.message || 'Failed to save plan. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    setAllFeatures(prev => [...prev, newFeature.trim()]);
+    // Optionally auto-check it for current plan in edit mode
+    closeAddFeatureModal();
   };
   
   // Prevent background scroll
@@ -252,29 +162,8 @@ const MembershipPlans = () => {
   };
   
   const formatDuration = (days) => {
-    if (days >= 365) {
-      const years = Math.floor(days / 365);
-      const remainingDays = days % 365;
-      const months = Math.floor(remainingDays / 30);
-      const finalDays = remainingDays % 30;
-
-      let result = `${years} Year${years !== 1 ? 's' : ''}`;
-      if (months > 0) {
-        result += ` ${months} Month${months !== 1 ? 's' : ''}`;
-      }
-      if (finalDays > 0) {
-        result += ` ${finalDays} Day${finalDays !== 1 ? 's' : ''}`;
-      }
-      return result;
-    }
-    if (days >= 30) {
-      const months = Math.floor(days / 30);
-      const remainingDays = days % 30;
-      if (remainingDays > 0) {
-        return `${months} Month${months !== 1 ? 's' : ''} ${remainingDays} Day${remainingDays !== 1 ? 's' : ''}`;
-      }
-      return `${months} Month${months !== 1 ? 's' : ''}`;
-    }
+    if (days >= 365) return `${Math.floor(days / 365)} Year${days >= 730 ? 's' : ''}`;
+    if (days >= 30) return `${Math.floor(days / 30)} Month${days >= 60 ? 's' : ''}`;
     return `${days} Day${days !== 1 ? 's' : ''}`;
   };
   
@@ -286,13 +175,13 @@ const MembershipPlans = () => {
       <div className="plan-view-content">
         {/* Header Section */}
         <div className="text-center mb-4 pb-3 border-bottom">
-          <h3 className="mb-1">{plan.name}</h3>
-          <p className="text-muted mb-2">{plan.description}</p>
+          <h3 className="mb-1">{plan.plan_name}</h3>
+          <p className="text-muted mb-2">{plan.plan_description}</p>
           <div className="mt-2">
             {getStatusBadge(plan.status)}
           </div>
         </div>
-
+        
         {/* Plan Details */}
         <div className="row g-3 mb-4">
           <div className="col-md-6">
@@ -303,7 +192,7 @@ const MembershipPlans = () => {
                 </div>
                 <div>
                   <h6 className="mb-1">Duration</h6>
-                  <p className="mb-0 fw-bold">{formatDuration(plan.durationDays)}</p>
+                  <p className="mb-0 fw-bold">{formatDuration(plan.duration_days)}</p>
                 </div>
               </div>
             </div>
@@ -316,7 +205,7 @@ const MembershipPlans = () => {
                 </div>
                 <div>
                   <h6 className="mb-1">Price</h6>
-                  <p className="mb-0 fw-bold">{formatPrice(plan.priceCents)}</p>
+                  <p className="mb-0 fw-bold">{formatPrice(plan.price_cents)}</p>
                 </div>
               </div>
             </div>
@@ -408,21 +297,13 @@ const MembershipPlans = () => {
               type="text"
               className="form-control border"
               placeholder="Search plans..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
         <div className="col-6 col-md-3 col-lg-2">
-          <select
-            className="form-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
+          <button className="btn btn-outline-secondary w-100">
+            <i className="fas fa-filter me-1"></i> Filter
+          </button>
         </div>
         <div className="col-6 col-md-3 col-lg-2">
           <button className="btn btn-outline-secondary w-100">
@@ -431,133 +312,67 @@ const MembershipPlans = () => {
         </div>
       </div>
       
-      {/* Loading/Error States */}
-      {loading && (
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-          <p className="mt-2">Loading membership plans...</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="alert alert-danger" role="alert">
-          <strong>Error:</strong> {error}
-          <button
-            className="btn btn-sm btn-outline-danger ms-2"
-            onClick={fetchPlans}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
       {/* Table */}
-      {!loading && !error && (
-        <div className="card shadow-sm border-0">
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="bg-light">
-                <tr>
-                  <th className="fw-semibold">PLAN NAME</th>
-                  <th className="fw-semibold">DURATION</th>
-                  <th className="fw-semibold">PRICE</th>
-                  <th className="fw-semibold">FEATURES</th>
-                  <th className="fw-semibold">STATUS</th>
-                  <th className="fw-semibold text-center">ACTIONS</th>
+      <div className="card shadow-sm border-0">
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="bg-light">
+              <tr>
+                <th className="fw-semibold">PLAN NAME</th>
+                <th className="fw-semibold">DURATION</th>
+                <th className="fw-semibold">PRICE</th>
+                <th className="fw-semibold">FEATURES</th>
+                <th className="fw-semibold">STATUS</th>
+                <th className="fw-semibold text-center">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((plan) => (
+                <tr key={plan.id}>
+                  <td>
+                    <strong>{plan.plan_name}</strong>
+                    <div><small className="text-muted">{plan.plan_description}</small></div>
+                  </td>
+                  <td>{formatDuration(plan.duration_days)}</td>
+                  <td>{formatPrice(plan.price_cents)}</td>
+                  <td>
+                    <small>
+                      {plan.features.slice(0, 2).join(', ')}
+                      {plan.features.length > 2 && ` +${plan.features.length - 2} more`}
+                    </small>
+                  </td>
+                  <td>{getStatusBadge(plan.status)}</td>
+                  <td className="text-center">
+                    <div className="d-flex flex-row justify-content-center gap-1">
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        title="View"
+                        onClick={() => handleView(plan)}
+                      >
+                        <FaEye size={14} />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-primary"
+                        title="Edit"
+                        onClick={() => handleEdit(plan)}
+                      >
+                        <FaEdit size={14} />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-danger"
+                        title="Delete"
+                        onClick={() => handleDeleteClick(plan)}
+                      >
+                        <FaTrashAlt size={14} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  // Filter and search logic
-                  const filteredPlans = plans.filter(plan => {
-                    const matchesSearch = searchTerm === '' ||
-                      plan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (plan.description && plan.description.toLowerCase().includes(searchTerm.toLowerCase()));
-
-                    const matchesFilter = filterStatus === 'All' || plan.status === filterStatus;
-
-                    return matchesSearch && matchesFilter;
-                  });
-
-                  return filteredPlans.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center py-5">
-                        <div className="text-muted">
-                          <i className="fas fa-inbox fa-2x mb-2"></i>
-                          <p>No membership plans found matching your criteria.</p>
-                          {(searchTerm || filterStatus !== 'All') && (
-                            <button
-                              className="btn btn-sm btn-secondary me-2"
-                              onClick={() => {
-                                setSearchTerm('');
-                                setFilterStatus('All');
-                              }}
-                            >
-                              Clear Filters
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={handleAddNew}
-                          >
-                            Create First Plan
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredPlans.map((plan) => (
-                      <tr key={plan.id}>
-                        <td>
-                          <strong>{plan.name}</strong>
-                          <div><small className="text-muted">{plan.description}</small></div>
-                        </td>
-                        <td>{formatDuration(plan.durationDays)}</td>
-                        <td>{formatPrice(plan.priceCents)}</td>
-                        <td>
-                          <small>
-                            {plan.features.slice(0, 2).join(', ')}
-                            {plan.features.length > 2 && ` +${plan.features.length - 2} more`}
-                          </small>
-                        </td>
-                        <td>{getStatusBadge(plan.status)}</td>
-                        <td className="text-center">
-                          <div className="d-flex flex-row justify-content-center gap-1">
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              title="View"
-                              onClick={() => handleView(plan)}
-                            >
-                              <FaEye size={14} />
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-primary"
-                              title="Edit"
-                              onClick={() => handleEdit(plan)}
-                            >
-                              <FaEdit size={14} />
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-danger"
-                              title="Delete"
-                              onClick={() => handleDeleteClick(plan)}
-                              disabled={submitting}
-                            >
-                              <FaTrashAlt size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  );
-                })()}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
       
       {/* MAIN MODAL (Add/Edit/View) */}
       {isModalOpen && (
@@ -584,16 +399,15 @@ const MembershipPlans = () => {
                 {modalType === 'view' ? (
                   <PlanViewContent plan={selectedPlan} />
                 ) : (
-                  <form onSubmit={handleFormSubmit}>
+                  <form>
                     {/* Plan Name */}
                     <div className="mb-3">
                       <label className="form-label">Plan Name <span className="text-danger">*</span></label>
                       <input
                         type="text"
-                        name="plan_name"
                         className="form-control rounded-3"
                         placeholder="e.g., Premium Annual Plan"
-                        defaultValue={selectedPlan?.name || ''}
+                        defaultValue={selectedPlan?.plan_name || ''}
                         readOnly={modalType === 'view'}
                         required
                       />
@@ -602,11 +416,10 @@ const MembershipPlans = () => {
                     <div className="mb-3">
                       <label className="form-label">Description</label>
                       <textarea
-                        name="description"
                         className="form-control rounded-3"
                         rows="3"
                         placeholder="Describe benefits, limitations, etc."
-                        defaultValue={selectedPlan?.description || ''}
+                        defaultValue={selectedPlan?.plan_description || ''}
                         readOnly={modalType === 'view'}
                       ></textarea>
                     </div>
@@ -615,10 +428,9 @@ const MembershipPlans = () => {
                       <label className="form-label">Duration (Days) <span className="text-danger">*</span></label>
                       <input
                         type="number"
-                        name="duration_days"
                         className="form-control rounded-3"
                         placeholder="e.g., 30, 90, 365"
-                        defaultValue={selectedPlan?.durationDays || ''}
+                        defaultValue={selectedPlan?.duration_days || ''}
                         readOnly={modalType === 'view'}
                         required
                       />
@@ -630,10 +442,9 @@ const MembershipPlans = () => {
                         <span className="input-group-text">₹</span>
                         <input
                           type="number"
-                          name="price"
                           className="form-control rounded-3"
                           placeholder="Enter price in rupees"
-                          defaultValue={selectedPlan ? selectedPlan.priceCents / 100 : ''}
+                          defaultValue={selectedPlan ? selectedPlan.price_cents / 100 : ''}
                           readOnly={modalType === 'view'}
                           required
                           step="0.01"
@@ -662,8 +473,6 @@ const MembershipPlans = () => {
                               <input
                                 className="form-check-input"
                                 type="checkbox"
-                                name="features[]"
-                                value={feature}
                                 id={`feature-${feature}`}
                                 defaultChecked={selectedPlan?.features?.includes(feature)}
                                 disabled={modalType === 'view'}
@@ -683,7 +492,6 @@ const MembershipPlans = () => {
                         <div className="form-check form-switch">
                           <input
                             type="checkbox"
-                            name="status"
                             className="form-check-input"
                             id="statusToggle"
                             defaultChecked={selectedPlan?.status === 'Active'}
@@ -706,7 +514,7 @@ const MembershipPlans = () => {
                       </button>
                       {modalType !== 'view' && (
                         <button
-                          type="submit"
+                          type="button"
                           className="btn"
                           style={{
                             backgroundColor: '#6EB2CC',
@@ -716,9 +524,12 @@ const MembershipPlans = () => {
                             padding: '10px 20px',
                             fontWeight: '500',
                           }}
-                          disabled={submitting}
+                          onClick={() => {
+                            alert(`${modalType === 'add' ? 'New plan added' : 'Plan updated'} successfully!`);
+                            closeModal();
+                          }}
                         >
-                          {submitting ? 'Saving...' : (modalType === 'add' ? 'Save Plan' : 'Update Plan')}
+                          {modalType === 'add' ? 'Save Plan' : 'Update Plan'}
                         </button>
                       )}
                     </div>
@@ -813,8 +624,8 @@ const MembershipPlans = () => {
                   <i className="fas fa-exclamation-triangle"></i>
                 </div>
                 <h5>Are you sure?</h5>
-              <p className="text-muted">
-                  This will permanently delete <strong>{selectedPlan?.name}</strong>.<br />
+                <p className="text-muted">
+                  This will permanently delete <strong>{selectedPlan?.plan_name}</strong>.<br />
                   This action cannot be undone.
                 </p>
               </div>

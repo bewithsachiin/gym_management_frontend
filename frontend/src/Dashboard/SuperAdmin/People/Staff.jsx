@@ -8,11 +8,59 @@ const Staff = () => {
   const [modalType, setModalType] = useState('add'); // 'add', 'edit', 'view'
   const [selectedStaff, setSelectedStaff] = useState(null);
   const fileInputRef = useRef(null);
+
+  // API data states
   const [staff, setStaff] = useState([]);
   const [branches, setBranches] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [staffRoles, setStaffRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // API functions
+  const fetchStaff = async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get('/staff');
+      setStaff(response.data.data.staff);
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch staff data');
+      console.error('Error fetching staff:', err);
+      // If unauthorized, the axios interceptor will handle logout
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBranches = async () => {
+    try {
+      const response = await axiosInstance.get('/branches');
+      setBranches(response.data.data.branches);
+    } catch (err) {
+      console.error('Error fetching branches:', err);
+      // If unauthorized, the axios interceptor will handle logout
+    }
+  };
+
+  const fetchStaffRoles = async () => {
+    try {
+      const response = await axiosInstance.get('/staff-roles');
+      setStaffRoles(response.data.data.roles);
+    } catch (err) {
+      console.error('Error fetching staff roles:', err);
+      // If unauthorized, the axios interceptor will handle logout
+    }
+  };
+
+  useEffect(() => {
+    // Check authentication before making API calls
+    if (checkAuth()) {
+      fetchStaff();
+      fetchBranches();
+      fetchStaffRoles();
+    }
+  }, []);
 
   const handleAddNew = () => {
     setModalType('add');
@@ -40,102 +88,20 @@ const Staff = () => {
   const confirmDelete = async () => {
     if (selectedStaff) {
       try {
-        await deleteStaff(selectedStaff.id);
+        setSubmitting(true);
+        await axiosInstance.delete(`/staff/${selectedStaff.id}`);
+        setStaff(prev => prev.filter(s => s.id !== selectedStaff.id));
         alert(`Staff member "${selectedStaff.first_name} ${selectedStaff.last_name}" has been deleted.`);
-        fetchStaff();
       } catch (err) {
-        alert('Failed to delete staff: ' + err.message);
+        alert('Failed to delete staff member');
+        console.error('Error deleting staff:', err);
+        // If unauthorized, the axios interceptor will handle logout
+      } finally {
+        setSubmitting(false);
       }
     }
     setIsDeleteModalOpen(false);
     setSelectedStaff(null);
-  };
-
-  // Fetch data on component mount
-  useEffect(() => {
-    fetchStaff();
-    fetchBranches();
-    fetchRoles();
-  }, []);
-
-  // API functions
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
-  const fetchStaff = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await axiosInstance.get('/staff', { headers: getAuthHeaders() });
-      if (response.data.success) setStaff(response.data.data.staff);
-      else throw new Error(response.data.message || 'Failed to fetch staff');
-    } catch (err) {
-      setError(err.message);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBranches = async () => {
-    try {
-      const response = await axiosInstance.get('/branches', { headers: getAuthHeaders() });
-      if (response.data.success) setBranches(response.data.data.branches);
-    } catch (err) {
-      console.error('Failed to fetch branches:', err);
-    }
-  };
-
-  const fetchRoles = async () => {
-    try {
-      const response = await axiosInstance.get('/staff-roles', { headers: getAuthHeaders() });
-      if (response.data.success) setRoles(response.data.data.roles);
-    } catch (err) {
-      console.error('Failed to fetch roles:', err);
-    }
-  };
-
-  const createStaff = async (payload) => {
-    const formData = new FormData();
-    Object.keys(payload).forEach(key => {
-      if (payload[key] !== null && payload[key] !== undefined) {
-        formData.append(key, payload[key]);
-      }
-    });
-    if (payload.profile_photo && payload.profile_photo[0]) {
-      formData.append('profile_photo', payload.profile_photo[0]);
-    }
-
-    const response = await axiosInstance.post('/staff', formData, {
-      headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' },
-    });
-    if (!response.data.success) throw new Error(response.data.message || 'Failed to create staff');
-    return response.data.data.staff;
-  };
-
-  const updateStaff = async (id, payload) => {
-    const formData = new FormData();
-    Object.keys(payload).forEach(key => {
-      if (payload[key] !== null && payload[key] !== undefined) {
-        formData.append(key, payload[key]);
-      }
-    });
-    if (payload.profile_photo && payload.profile_photo[0]) {
-      formData.append('profile_photo', payload.profile_photo[0]);
-    }
-
-    const response = await axiosInstance.put(`/staff/${id}`, formData, {
-      headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' },
-    });
-    if (!response.data.success) throw new Error(response.data.message || 'Failed to update staff');
-    return response.data.data.staff;
-  };
-
-  const deleteStaff = async (id) => {
-    const response = await axiosInstance.delete(`/staff/${id}`, { headers: getAuthHeaders() });
-    if (!response.data.success) throw new Error(response.data.message || 'Failed to delete staff');
   };
 
   const closeModal = () => {
@@ -152,7 +118,7 @@ const Staff = () => {
   };
 
   // Prevent background scroll
-  React.useEffect(() => {
+  useEffect(() => {
     if (isModalOpen || isDeleteModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -184,8 +150,8 @@ const Staff = () => {
       Housekeeping: "bg-success-subtle text-success-emphasis"
     };
     return (
-      <span className={`badge rounded-pill ${roleColors[role] || 'bg-light'} px-3 py-1`}>
-        {role}
+      <span className={`badge rounded-pill ${roleColors[role?.name || role] || 'bg-light'} px-3 py-1`}>
+        {role?.name || role}
       </span>
     );
   };
@@ -205,6 +171,16 @@ const Staff = () => {
     const prefix = "STAFF";
     const maxId = staff.length > 0 ? Math.max(...staff.map(s => parseInt(s.staff_id.replace(prefix, '')) || 0)) : 0;
     return `${prefix}${String(maxId + 1).padStart(3, '0')}`;
+  };
+
+  // Check if user is authenticated before making API calls
+  const checkAuth = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = '/login';
+      return false;
+    }
+    return true;
   };
 
   const getInitials = (firstName, lastName) => {
@@ -271,27 +247,42 @@ const Staff = () => {
         </div>
       </div>
 
+      {/* Loading/Error States */}
+      {loading && (
+        <div className="text-center py-4">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="mt-2">Loading staff data...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          {error}
+        </div>
+      )}
+
       {/* Table */}
-      <div className="card shadow-sm border-0">
-        <div className="table-responsive">
-          {loading && <p className="text-center py-4">Loading staff...</p>}
-          {error && <div className="alert alert-danger mx-3" role="alert">{error}</div>}
-          {!loading && !error && (
+      {!loading && !error && (
+        <div className="card shadow-sm border-0">
+          <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
-            <thead className="bg-light">
-              <tr>
-                <th className="fw-semibold">PHOTO</th>
-                <th className="fw-semibold">NAME</th>
-                <th className="fw-semibold">ROLE</th>
-                <th className="fw-semibold">BRANCH</th>
-                <th className="fw-semibold">EMAIL</th>
-                <th className="fw-semibold">PHONE</th>
-                <th className="fw-semibold">STATUS</th>
-                <th className="fw-semibold text-center">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staff.map((member) => (
+              <thead className="bg-light">
+                <tr>
+                  <th className="fw-semibold">PHOTO</th>
+                  <th className="fw-semibold">NAME</th>
+                  <th className="fw-semibold">ROLE</th>
+                  <th className="fw-semibold">BRANCH</th>
+                  <th className="fw-semibold">EMAIL</th>
+                  <th className="fw-semibold">PHONE</th>
+                  <th className="fw-semibold">STATUS</th>
+                  <th className="fw-semibold text-center">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((member) => (
                 <tr key={member.id}>
                   <td>
                     {member.profile_photo ? (
@@ -325,7 +316,7 @@ const Staff = () => {
                     <strong>{member.first_name} {member.last_name}</strong>
                     <div><small className="text-muted">{member.staff_id}</small></div>
                   </td>
-                  <td>{getRoleBadge(member.role?.name)}</td>
+                  <td>{getRoleBadge(member.role)}</td>
                   <td>{branches.find(b => b.id === member.branch?.id)?.name || '—'}</td>
                   <td>{member.email}</td>
                   <td>{member.phone}</td>
@@ -360,11 +351,11 @@ const Staff = () => {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-          )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* MAIN MODAL (Add/Edit/View) */}
       {isModalOpen && (
@@ -396,64 +387,29 @@ const Staff = () => {
                       <label className="form-label">Staff ID</label>
                       <input
                         type="text"
-                        name="staff_id"
                         className="form-control rounded-3"
+                        name="staff_id"
                         defaultValue={selectedStaff?.staff_id || (modalType === 'add' ? getNextStaffId() : '')}
                         readOnly
                       />
                     </div>
                     <div className="col-12 col-md-6">
                       <label className="form-label">Profile Photo</label>
-                      {modalType === 'view' ? (
-                        <div className="d-flex align-items-center">
-                          {selectedStaff?.profile_photo ? (
-                            <img
-                              src={selectedStaff.profile_photo}
-                              alt={`${selectedStaff.first_name} ${selectedStaff.last_name}`}
-                              style={{
-                                width: '60px',
-                                height: '60px',
-                                borderRadius: '50%',
-                                objectFit: 'cover',
-                                border: '2px solid #eee',
-                                marginRight: '15px'
-                              }}
-                            />
-                          ) : (
-                            <div
-                              className="rounded-circle text-white d-flex align-items-center justify-content-center"
-                              style={{
-                                width: '60px',
-                                height: '60px',
-                                fontSize: '1.2rem',
-                                fontWeight: 'bold',
-                                backgroundColor: getInitialColor(getInitials(selectedStaff.first_name, selectedStaff.last_name)),
-                                marginRight: '15px'
-                              }}
-                            >
-                              {getInitials(selectedStaff.first_name, selectedStaff.last_name)}
-                            </div>
-                          )}
-                          <div>
-                            <small className="text-muted">Current profile photo</small>
-                          </div>
-                        </div>
-                      ) : (
-                        <input
-                          type="file"
-                          name="profile_photo"
-                          className="form-control rounded-3"
-                          accept="image/*"
-                          ref={fileInputRef}
-                        />
-                      )}
+                      <input
+                        type="file"
+                        className="form-control rounded-3"
+                        name="profile_photo"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        disabled={modalType === 'view'}
+                      />
                     </div>
                     <div className="col-12 col-md-6">
                       <label className="form-label">First Name <span className="text-danger">*</span></label>
                       <input
                         type="text"
-                        name="first_name"
                         className="form-control rounded-3"
+                        name="first_name"
                         placeholder="Enter first name"
                         defaultValue={selectedStaff?.first_name || ''}
                         readOnly={modalType === 'view'}
@@ -464,8 +420,8 @@ const Staff = () => {
                       <label className="form-label">Last Name <span className="text-danger">*</span></label>
                         <input
                           type="text"
-                          name="last_name"
                           className="form-control rounded-3"
+                          name="last_name"
                           placeholder="Enter last name"
                           defaultValue={selectedStaff?.last_name || ''}
                           readOnly={modalType === 'view'}
@@ -475,8 +431,8 @@ const Staff = () => {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Gender <span className="text-danger">*</span></label>
                       <select
-                        name="gender"
                         className="form-select rounded-3"
+                        name="gender"
                         defaultValue={selectedStaff?.gender || 'Male'}
                         disabled={modalType === 'view'}
                         required
@@ -490,8 +446,8 @@ const Staff = () => {
                       <label className="form-label">Date of Birth <span className="text-danger">*</span></label>
                       <input
                         type="date"
-                        name="dob"
                         className="form-control rounded-3"
+                        name="dob"
                         defaultValue={selectedStaff?.dob ? new Date(selectedStaff.dob).toISOString().split('T')[0] : ''}
                         readOnly={modalType === 'view'}
                         required
@@ -501,8 +457,8 @@ const Staff = () => {
                       <label className="form-label">Email <span className="text-danger">*</span></label>
                       <input
                         type="email"
-                        name="email"
                         className="form-control rounded-3"
+                        name="email"
                         placeholder="example@email.com"
                         defaultValue={selectedStaff?.email || ''}
                         readOnly={modalType === 'view'}
@@ -513,8 +469,8 @@ const Staff = () => {
                       <label className="form-label">Phone <span className="text-danger">*</span></label>
                       <input
                         type="tel"
-                        name="phone"
                         className="form-control rounded-3 "
+                        name="phone"
                         placeholder="+1 555-123-4567"
                         defaultValue={selectedStaff?.phone || ''}
                         readOnly={modalType === 'view'}
@@ -524,8 +480,8 @@ const Staff = () => {
                     <div className="col-12">
                       <label className="form-label">Status</label>
                       <select
-                        name="status"
                         className="form-select rounded-3"
+                        name="status"
                         defaultValue={selectedStaff?.status || 'Active'}
                         disabled={modalType === 'view'}
                       >
@@ -541,13 +497,13 @@ const Staff = () => {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Role <span className="text-danger">*</span></label>
                       <select
-                        name="roleId"
                         className="form-select rounded-3"
-                        defaultValue={selectedStaff?.role?.id || (roles.length > 0 ? roles[0].id : '')}
+                        name="role"
+                        defaultValue={selectedStaff?.role?.id || (staffRoles.length > 0 ? staffRoles[0].id : '')}
                         disabled={modalType === 'view'}
                         required
                       >
-                        {roles.map(role => (
+                        {staffRoles.map(role => (
                           <option key={role.id} value={role.id}>{role.name}</option>
                         ))}
                       </select>
@@ -555,8 +511,8 @@ const Staff = () => {
                     <div className="col-12 col-md-6">
                       <label className="form-label">Branch <span className="text-danger">*</span></label>
                       <select
-                        name="branchId"
                         className="form-select rounded-3"
+                        name="branch"
                         defaultValue={selectedStaff?.branch?.id || (branches.length > 0 ? branches[0].id : '')}
                         disabled={modalType === 'view'}
                         required
@@ -570,8 +526,8 @@ const Staff = () => {
                       <label className="form-label">Join Date <span className="text-danger">*</span></label>
                       <input
                         type="date"
-                        name="join_date"
                         className="form-control rounded-3"
+                        name="join_date"
                         defaultValue={selectedStaff?.join_date ? new Date(selectedStaff.join_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
                         readOnly={modalType === 'view'}
                         required
@@ -581,8 +537,8 @@ const Staff = () => {
                       <label className="form-label">Exit Date</label>
                       <input
                         type="date"
-                        name="exit_date"
                         className="form-control rounded-3"
+                        name="exit_date"
                         defaultValue={selectedStaff?.exit_date ? new Date(selectedStaff.exit_date).toISOString().split('T')[0] : ''}
                         readOnly={modalType === 'view'}
                       />
@@ -667,9 +623,8 @@ const Staff = () => {
                       <div className="form-check form-switch">
                         <input
                           type="checkbox"
-                          name="login_enabled"
                           className="form-check-input"
-                          id="loginEnabled"
+                          name="login_enabled"
                           defaultChecked={selectedStaff?.login_enabled || false}
                           disabled={modalType === 'view'}
                         />
@@ -682,8 +637,8 @@ const Staff = () => {
                       <label className="form-label">Username</label>
                       <input
                         type="text"
-                        name="username"
                         className="form-control rounded-3"
+                        name="username"
                         placeholder="Enter username"
                         defaultValue={selectedStaff?.username || ''}
                         readOnly={modalType === 'view'}
@@ -694,8 +649,8 @@ const Staff = () => {
                       <div className="input-group">
                         <input
                           type="password"
-                          name="password"
                           className="form-control rounded-3"
+                          name="password"
                           placeholder="Enter password"
                           id="passwordField"
                           defaultValue={
@@ -756,52 +711,58 @@ const Staff = () => {
                           padding: '10px 20px',
                           fontWeight: '500',
                         }}
+                        disabled={submitting}
                         onClick={async () => {
-                          const form = document.querySelector('form');
-                          const formData = new FormData(form);
-                          const payload = {};
-
-                          // Convert FormData to object
-                          for (let [key, value] of formData.entries()) {
-                            if (key === 'profile_photo' && value instanceof File) {
-                              payload[key] = [value]; // Keep as array for consistency
-                            } else {
-                              payload[key] = value;
-                            }
-                          }
-
-                          // Handle file input separately
-                          const fileInput = form.querySelector('input[type="file"]');
-                          if (fileInput && fileInput.files.length > 0) {
-                            payload.profile_photo = fileInput.files;
-                          }
-
-                          // Convert checkbox values
-                          payload.login_enabled = formData.get('login_enabled') === 'on';
-
-                          // Convert numeric fields
-                          if (payload.roleId) payload.roleId = parseInt(payload.roleId);
-                          if (payload.branchId) payload.branchId = parseInt(payload.branchId);
-                          if (payload.commission_rate_percent) payload.commission_rate_percent = parseFloat(payload.commission_rate_percent);
-                          if (payload.hourly_rate) payload.hourly_rate = parseFloat(payload.hourly_rate);
-                          if (payload.fixed_salary) payload.fixed_salary = parseFloat(payload.fixed_salary);
-
                           try {
+                            setSubmitting(true);
+                            const formData = new FormData();
+
+                            // Collect form data
+                            const form = document.querySelector('form');
+                            const formElements = form.elements;
+
+                            for (let element of formElements) {
+                              if (element.name && element.value && element.type !== 'submit' && element.type !== 'button') {
+                                if (element.type === 'file' && element.files[0]) {
+                                  formData.append(element.name, element.files[0]);
+                                } else if (element.type === 'checkbox') {
+                                  formData.append(element.name, element.checked);
+                                } else {
+                                  formData.append(element.name, element.value);
+                                }
+                              }
+                            }
+
+                            // Add roleId and branchId
+                            const roleSelect = form.querySelector('select[name="role"]');
+                            const branchSelect = form.querySelector('select[name="branch"]');
+                            if (roleSelect && roleSelect.value) formData.append('roleId', roleSelect.value);
+                            if (branchSelect && branchSelect.value) formData.append('branchId', branchSelect.value);
+
                             if (modalType === 'add') {
-                              await createStaff(payload);
+                              await axiosInstance.post('/staff', formData, {
+                                headers: { 'Content-Type': 'multipart/form-data' }
+                              });
                               alert('New staff member added successfully!');
                             } else {
-                              await updateStaff(selectedStaff.id, payload);
+                              await axiosInstance.put(`/staff/${selectedStaff.id}`, formData, {
+                                headers: { 'Content-Type': 'multipart/form-data' }
+                              });
                               alert('Staff member updated successfully!');
                             }
-                            fetchStaff();
+
+                            fetchStaff(); // Refresh the list
                             closeModal();
                           } catch (err) {
-                            alert(err.message);
+                            alert(`Failed to ${modalType === 'add' ? 'add' : 'update'} staff member`);
+                            console.error('Error saving staff:', err);
+                            // If unauthorized, the axios interceptor will handle logout
+                          } finally {
+                            setSubmitting(false);
                           }
                         }}
                       >
-                        {modalType === 'add' ? 'Add Staff' : 'Update Staff'}
+                        {submitting ? 'Saving...' : (modalType === 'add' ? 'Add Staff' : 'Update Staff')}
                       </button>
                     )}
                   </div>
@@ -864,40 +825,38 @@ const Staff = () => {
         </div>
       )}
       
-      <style>
-        {`
+      <style jsx global>{`
+        .action-btn {
+          width: 36px;
+          height: 36px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        @media (max-width: 768px) {
           .action-btn {
-            width: 36px;
-            height: 36px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 32px;
+            height: 32px;
           }
-
-          @media (max-width: 768px) {
-            .action-btn {
-              width: 32px;
-              height: 32px;
-            }
+        }
+        
+        /* Make form controls responsive */
+        .form-control, .form-select {
+          width: 100%;
+        }
+        
+        /* Ensure modal content is responsive */
+        @media (max-width: 576px) {
+          .modal-dialog {
+            margin: 0.5rem;
           }
-
-          /* Make form controls responsive */
-          .form-control, .form-select {
-            width: 100%;
+          .modal-content {
+            border-radius: 0.5rem;
           }
-
-          /* Ensure modal content is responsive */
-          @media (max-width: 576px) {
-            .modal-dialog {
-              margin: 0.5rem;
-            }
-            .modal-content {
-              border-radius: 0.5rem;
-            }
-          }
-        `}
-      </style>
+        }
+      `}</style>
     </div>
   );
 };

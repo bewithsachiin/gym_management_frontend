@@ -41,6 +41,14 @@ const getAllStaff = async () => {
       commission_rate_percent: true,
       login_enabled: true,
       username: true,
+      createdBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
       createdAt: true,
       updatedAt: true,
     },
@@ -68,6 +76,7 @@ const getAllStaff = async () => {
     commission_rate_percent: staff.commission_rate_percent,
     login_enabled: staff.login_enabled,
     username: staff.username,
+    createdBy: staff.createdBy,
     createdAt: staff.createdAt,
     updatedAt: staff.updatedAt,
   }));
@@ -179,6 +188,14 @@ const createStaff = async (data, createdById) => {
       commission_rate_percent: true,
       login_enabled: true,
       username: true,
+      createdBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
       createdAt: true,
       updatedAt: true,
     },
@@ -376,8 +393,79 @@ const deleteStaff = async (id) => {
   await prisma.user.delete({ where: { id: staff.userId } });
 };
 
+const getStaffByBranch = async (branchId) => {
+  const staffList = await prisma.staff.findMany({
+    where: { branchId: parseInt(branchId) },
+    select: {
+      id: true,
+      staff_id: true,
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      gender: true,
+      dob: true,
+      phone: true,
+      profile_photo: true,
+      status: true,
+      role: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      join_date: true,
+      exit_date: true,
+      salary_type: true,
+      hourly_rate: true,
+      fixed_salary: true,
+      commission_rate_percent: true,
+      login_enabled: true,
+      username: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  // Flatten the user data for consistency
+  return staffList.map(staff => ({
+    id: staff.id,
+    staff_id: staff.staff_id,
+    firstName: staff.user.firstName,
+    lastName: staff.user.lastName,
+    email: staff.user.email,
+    gender: staff.gender,
+    dob: staff.dob,
+    phone: staff.phone,
+    profile_photo: staff.profile_photo,
+    status: staff.status,
+    role: staff.role,
+    branch: staff.branch,
+    join_date: staff.join_date,
+    exit_date: staff.exit_date,
+    salary_type: staff.salary_type,
+    hourly_rate: staff.hourly_rate,
+    fixed_salary: staff.fixed_salary,
+    commission_rate_percent: staff.commission_rate_percent,
+    login_enabled: staff.login_enabled,
+    username: staff.username,
+    createdAt: staff.createdAt,
+    updatedAt: staff.updatedAt,
+  }));
+};
+
 module.exports = {
   getAllStaff,
+  getStaffByBranch,
   createStaff,
   updateStaff,
   deleteStaff,

@@ -41,14 +41,28 @@ const staffRoutes = require('./routes/staffRoutes');
 const staffRoleRoutes = require('./routes/staffRoleRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const planRoutes = require('./routes/planRoutes');
-const qrCheckRoutes = require('./routes/qrCheckRoutes');
+const classScheduleRoutes = require('./routes/classScheduleRoutes');
+const groupRoutes = require('./routes/groupRoutes');
+const branchPlanRoutes = require('./routes/branchPlanRoutes');
+const personalTrainingSessionRoutes = require('./routes/personalTrainingSessionRoutes');
+const walkInRoutes = require('./routes/walkInRoutes');
+const personalTrainingRoutes = require('./routes/personalTrainingRoutes');
+
+
+
+// Mount routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/branches', branchRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/staff-roles', staffRoleRoutes);
 app.use('/api/v1/members', memberRoutes);
 app.use('/api/v1/plans', planRoutes);
-app.use('/api/v1/qr-check', qrCheckRoutes);
+app.use('/api/v1/classes', classScheduleRoutes);
+app.use('/api/v1/groups', groupRoutes);
+app.use('/api/v1/branch-plans', branchPlanRoutes);
+app.use('/api/v1/sessions', personalTrainingSessionRoutes);
+app.use('/api/v1/walk-ins', walkInRoutes);
+app.use('/api/v1/personal-training', personalTrainingRoutes);
 
 // ✅ Health check route
 app.get('/api/health', (req, res) => {
@@ -56,7 +70,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ✅ Centralized error handling
-const errorHandler = require('./middleware/errorHandler');
+const errorHandler = require('./middlewares/errorHandler');
 app.use(errorHandler);
 
 module.exports = app;

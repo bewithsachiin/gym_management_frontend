@@ -1,12 +1,88 @@
 const express = require('express');
 const router = express.Router();
-const memberController = require('../controllers/memberController');
-const { memberUpload } = require('../middleware/uploadMiddleware');
-const { authenticateToken, authorizeRoles } = require('../middlewares/auth.middleware');
 
-router.get('/', authenticateToken, authorizeRoles('SUPERADMIN'), memberController.getMembers);
-router.post('/', authenticateToken, authorizeRoles('SUPERADMIN'), memberUpload, memberController.createMember);
-router.put('/:id', authenticateToken, authorizeRoles('SUPERADMIN'), memberUpload, memberController.updateMember);
-router.delete('/:id', authenticateToken, authorizeRoles('SUPERADMIN'), memberController.deleteMember);
+// Controllers
+const memberController = require('../controllers/memberController');
+
+// Middlewares
+const { memberUpload } = require('../middlewares/uploadMiddleware');
+const { authenticateToken } = require('../middlewares/auth.middleware');
+const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
+
+
+// 🛡️ Logged in + role access
+const protect = [
+  authenticateToken,
+  accessControl()
+];
+
+// 🛡️ Logged in + role access + user-based filtering
+const protectWithFilter = [
+  authenticateToken,
+  accessControl({ includeUserFilter: true })
+];
+
+// 🛡️ Admin & Superadmin only
+const adminOnly = [
+  authenticateToken,
+  accessControl(),
+  checkPermission(['superadmin', 'admin'])
+];
+
+// 🛡️ Admin or Superadmin + branch filter
+const adminWithFilter = [
+  authenticateToken,
+  accessControl({ includeUserFilter: true }),
+  checkPermission(['superadmin', 'admin'])
+];
+
+
+// ----------------------------------------------------
+// GET ALL MEMBERS (search + branch based auto filter)
+// ----------------------------------------------------
+router.get('/', protect, memberController.getMembers);
+
+// ----------------------------------------------------
+// GET SINGLE MEMBER (branch restricted unless superadmin)
+// ----------------------------------------------------
+router.get('/:id', protectWithFilter, memberController.getMemberById);
+
+// ----------------------------------------------------
+// CREATE A MEMBER (Admin / Superadmin Only)
+// ----------------------------------------------------
+router.post(
+  '/',
+  adminOnly,
+  memberUpload,            // For profile image
+  memberController.createMember
+);
+
+// ----------------------------------------------------
+// UPDATE MEMBER (Admin / Superadmin Only)
+// ----------------------------------------------------
+router.put(
+  '/:id',
+  adminWithFilter,
+  memberUpload,
+  memberController.updateMember
+);
+
+// ----------------------------------------------------
+// TOGGLE ACTIVE / DEACTIVATE MEMBER
+// ----------------------------------------------------
+router.put(
+  '/:id/activate',
+  protectWithFilter,
+  memberController.activateMember
+);
+
+// ----------------------------------------------------
+// DELETE MEMBER (Admin / Superadmin Only)
+// ----------------------------------------------------
+router.delete(
+  '/:id',
+  adminWithFilter,
+  memberController.deleteMember
+);
 
 module.exports = router;
