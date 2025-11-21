@@ -2,6 +2,12 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 class MembershipService {
+  // Helper method to format date
+  formatDate(date) {
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    return new Date(date).toLocaleDateString('en-US', options);
+  }
+
   // Get all memberships with search and pagination
   async getAllMemberships(search, page, limit) {
     const skip = (page - 1) * limit;
@@ -23,8 +29,21 @@ class MembershipService {
 
     const total = await prisma.membership.count({ where });
 
+    // Transform memberships to match frontend format
+    const transformedMemberships = memberships.map(membership => ({
+      id: membership.id,
+      title: membership.title,
+      name: membership.name,
+      amount: (membership.amount / 100).toString(),
+      paidAmount: (membership.paidAmount / 100).toString(),
+      dueAmount: (membership.dueAmount / 100).toString(),
+      startDate: this.formatDate(membership.startDate),
+      endDate: this.formatDate(membership.endDate),
+      paymentStatus: membership.paymentStatus,
+    }));
+
     return {
-      memberships,
+      memberships: transformedMemberships,
       pagination: {
         page,
         limit,
@@ -36,9 +55,25 @@ class MembershipService {
 
   // Get membership by ID
   async getMembershipById(id) {
-    return await prisma.membership.findUnique({
+    const membership = await prisma.membership.findUnique({
       where: { id: parseInt(id) },
     });
+
+    if (membership) {
+      return {
+        id: membership.id,
+        title: membership.title,
+        name: membership.name,
+        amount: (membership.amount / 100).toString(),
+        paidAmount: (membership.paidAmount / 100).toString(),
+        dueAmount: (membership.dueAmount / 100).toString(),
+        startDate: this.formatDate(membership.startDate),
+        endDate: this.formatDate(membership.endDate),
+        paymentStatus: membership.paymentStatus,
+      };
+    }
+
+    return membership;
   }
 
   // Create a new membership

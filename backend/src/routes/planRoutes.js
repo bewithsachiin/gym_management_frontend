@@ -5,9 +5,9 @@ const { authenticateToken } = require('../middlewares/auth.middleware');
 const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
 
 // Plan CRUD routes
-router.get('/', authenticateToken, accessControl(), planController.getPlans);
-router.get('/features', authenticateToken, accessControl(), planController.getFeatures);
-router.get('/:id', authenticateToken, accessControl(), planController.getPlan);
+router.get('/', planController.getPlans);
+router.get('/features', planController.getFeatures);
+router.get('/:id',planController.getPlan);
 router.post('/', authenticateToken, checkPermission(['superadmin']), planController.createPlan);
 router.put('/:id', authenticateToken, accessControl(), checkPermission(['superadmin']), planController.updatePlan);
 router.delete('/:id', authenticateToken, accessControl(), checkPermission(['superadmin']), planController.deletePlan);

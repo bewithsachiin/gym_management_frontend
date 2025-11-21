@@ -82,16 +82,18 @@ const Membership = () => {
         }
     ];
 
-    const [members, setMembers] = useState(allMembers);
-    const [filteredMembers, setFilteredMembers] = useState(allMembers);
+    const [members, setMembers] = useState([]);
+    const [filteredMembers, setFilteredMembers] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewModal, setViewModal] = useState(false);
     const [selectedMember, setSelectedMember] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const itemsPerPage = 3;
-    const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
 
     useEffect(() => {
         setFilteredMembers(
@@ -178,33 +180,46 @@ const Membership = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {currentMembers.map(member => (
-                                <tr key={member.id}>
-                                    <td>{member.title}</td>
-                                    <td>{member.name}</td>
-                                    <td>₹{member.amount}</td>
-                                    <td>₹{member.paidAmount}</td>
-                                    <td>₹{member.dueAmount}</td>
-                                    <td>{member.startDate}</td>
-                                    <td>{member.endDate}</td>
-                                    <td>{member.paymentStatus}</td>
-                                    <td className="text-center">
-                                        <button
-                                            className="btn btn-sm btn-outline-secondary"
-                                            title="View"
-                                            onClick={() => openViewModal(member)}
-                                        >
-                                            <FaEye size={14} />
-                                        </button>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="9" className="text-center text-muted py-4">
+                                        Loading...
                                     </td>
                                 </tr>
-                            ))}
-                            {currentMembers.length === 0 && (
+                            ) : error ? (
+                                <tr>
+                                    <td colSpan="9" className="text-center text-danger py-4">
+                                        {error}
+                                    </td>
+                                </tr>
+                            ) : filteredMembers.length === 0 ? (
                                 <tr>
                                     <td colSpan="9" className="text-center text-muted py-4">
                                         No payments found.
                                     </td>
                                 </tr>
+                            ) : (
+                                filteredMembers.map(member => (
+                                    <tr key={member.id}>
+                                        <td>{member.title}</td>
+                                        <td>{member.name}</td>
+                                        <td>₹{member.amount}</td>
+                                        <td>₹{member.paidAmount}</td>
+                                        <td>₹{member.dueAmount}</td>
+                                        <td>{member.startDate}</td>
+                                        <td>{member.endDate}</td>
+                                        <td>{member.paymentStatus}</td>
+                                        <td className="text-center">
+                                            <button
+                                                className="btn btn-sm btn-outline-secondary"
+                                                title="View"
+                                                onClick={() => openViewModal(member)}
+                                            >
+                                                <FaEye size={14} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
                             )}
                         </tbody>
                     </table>

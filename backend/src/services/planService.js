@@ -13,52 +13,71 @@ const getAllPlans = async (filters = {}) => {
   if (active !== undefined) where.active = active === 'true';
   if (adminId) where.adminId = parseInt(adminId);
 
-  return await prisma.plan.findMany({
-    where,
-    include: {
-      admin: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-        },
+  // For dropdown/simple list, use minimal include
+  const isSimpleQuery = active === 'true' && !type && !adminId;
+
+  const include = isSimpleQuery ? {
+    admin: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
       },
-      branch: {
-        select: {
-          id: true,
-          name: true,
-        },
+    },
+    branch: {
+      select: {
+        id: true,
+        name: true,
       },
-      bookings: {
-        select: {
-          id: true,
-          status: true,
-          requestedAt: true,
-          member: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
+    },
+  } : {
+    admin: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
       },
-      memberPlans: {
-        select: {
-          id: true,
-          startDate: true,
-          expiryDate: true,
-          remainingSessions: true,
-          member: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
+    },
+    branch: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    bookings: {
+      select: {
+        id: true,
+        status: true,
+        requestedAt: true,
+        member: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
           },
         },
       },
     },
+    memberPlans: {
+      select: {
+        id: true,
+        startDate: true,
+        expiryDate: true,
+        remainingSessions: true,
+        member: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    },
+  };
+
+  return await prisma.plan.findMany({
+    where,
+    include,
     orderBy: { createdAt: 'desc' },
   });
 };

@@ -40,10 +40,11 @@ const ClassesSchedule = () => {
     try {
       setLoading(true);
       const res = await axiosInstance.get("/classes");
+      if (!res.data.success) throw new Error(res.data.message || "Failed to load classes");
       setClasses(res.data.data.classes || []);
     } catch (err) {
       console.error("Error fetching classes:", err);
-      alert("Failed to load classes");
+      alert(err.message || "Failed to load classes");
     } finally {
       setLoading(false);
     }
@@ -124,7 +125,7 @@ const ClassesSchedule = () => {
   ------------------------------------------------------------------ */
   const saveNewClass = async () => {
     try {
-      await axiosInstance.post("/classes", {
+      const res = await axiosInstance.post("/classes", {
         class_name: formClassName,
         trainer_id: formTrainerId,
         date: formDate,
@@ -133,12 +134,14 @@ const ClassesSchedule = () => {
         total_sheets: formSheets,
         status: formStatus,
       });
+      if (!res.data.success) throw new Error(res.data.message || "Failed to create class");
 
+      alert("Class created successfully");
       fetchClasses();
       setIsModalOpen(false);
     } catch (err) {
       console.error("Create error:", err);
-      alert(err.response?.data?.message || "Failed to create class");
+      alert(err.response?.data?.message || err.message || "Failed to create class");
     }
   };
 
@@ -147,7 +150,7 @@ const ClassesSchedule = () => {
   ------------------------------------------------------------------ */
   const updateExistingClass = async () => {
     try {
-      await axiosInstance.put(`/classes/${selectedClass.id}`, {
+      const res = await axiosInstance.put(`/classes/${selectedClass.id}`, {
         class_name: formClassName,
         trainer_id: formTrainerId,
         date: formDate,
@@ -156,12 +159,14 @@ const ClassesSchedule = () => {
         total_sheets: formSheets,
         status: formStatus,
       });
+      if (!res.data.success) throw new Error(res.data.message || "Failed to update class");
 
+      alert("Class updated successfully");
       fetchClasses();
       setIsModalOpen(false);
     } catch (err) {
       console.error("Update error:", err);
-      alert(err.response?.data?.message || "Failed to update class");
+      alert(err.response?.data?.message || err.message || "Failed to update class");
     }
   };
 
@@ -170,12 +175,15 @@ const ClassesSchedule = () => {
   ------------------------------------------------------------------ */
   const confirmDelete = async () => {
     try {
-      await axiosInstance.delete(`/classes/${selectedClass.id}`);
+      const res = await axiosInstance.delete(`/classes/${selectedClass.id}`);
+      if (!res.data.success) throw new Error(res.data.message || "Failed to delete class");
+
+      alert("Class deleted successfully");
       fetchClasses();
       setIsDeleteModalOpen(false);
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete class");
+      alert(err.response?.data?.message || err.message || "Failed to delete class");
     }
   };
 

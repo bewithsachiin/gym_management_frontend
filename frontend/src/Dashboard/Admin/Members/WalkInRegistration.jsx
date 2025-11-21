@@ -1,57 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaEye, FaEdit, FaTrashAlt, FaUser, FaPhone, FaEnvelope, FaCalendarAlt, FaDumbbell, FaClock, FaStickyNote } from 'react-icons/fa';
+import axiosInstance from '../../../utils/axiosInstance';
+import { useUser } from '../../../UserContext';
 
 const WalkInRegistration = () => {
+  const { user } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modalType, setModalType] = useState('view'); // 'add', 'edit', 'view'
   const [selectedWalkIn, setSelectedWalkIn] = useState(null);
+  const [walkIns, setWalkIns] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  // Sample data
-  const [walkIns, setWalkIns] = useState([
-    {
-      id: 1,
-      name: "Rahul Sharma",
-      phone: "+91 98765 43210",
-      email: "rahul@example.com",
-      preferred_membership_plan: "Premium Annual",
-      interested_in: "Both",
-      preferred_time: "2025-04-10T18:00",
-      notes: "Interested in morning slots.",
-      registered_at: "2025-04-05T10:30:00"
-    },
-    {
-      id: 2,
-      name: "Priya Patel",
-      phone: "+91 91234 56789",
-      email: "",
-      preferred_membership_plan: "Basic Monthly",
-      interested_in: "Group Classes",
-      preferred_time: "2025-04-08T19:30",
-      notes: "Student, looking for discounts.",
-      registered_at: "2025-04-05T14:15:00"
-    },
-    {
-      id: 3,
-      name: "Amit Verma",
-      phone: "+91 88888 77777",
-      email: "amit.v@example.com",
-      preferred_membership_plan: "",
-      interested_in: "Personal Training",
-      preferred_time: "",
-      notes: "Wants to start next week.",
-      registered_at: "2025-04-04T16:45:00"
+  // Fetch walk-ins from API
+  const fetchWalkIns = async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get('/walk-ins', {
+        params: { branchId: user?.branchId }
+      });
+      if (response.data.success) {
+        setWalkIns(response.data.data.walkIns);
+        setError(null);
+      } else {
+        setError(response.data.message || 'Failed to fetch walk-in registrations');
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred while fetching walk-in registrations');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
-  // Mock plans for dropdown
-  const membershipPlans = [
-    "Basic Monthly",
-    "Premium Annual",
-    "Student Plan",
-    "Weekend Warrior",
-    "Corporate Package"
-  ];
+  // Fetch plans from API
+  const fetchPlans = async () => {
+    try {
+      const response = await axiosInstance.get('/plans');
+      if (response.data.success) {
+        setPlans(response.data.data.plans);
+      } else {
+        console.error('Failed to fetch plans:', response.data.message);
+      }
+    } catch (err) {
+      console.error('Error fetching plans:', err);
+    }
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchWalkIns();
+    fetchPlans();
+  }, []);
 
   const handleAddNew = () => {
     setModalType('add');
@@ -76,10 +77,20 @@ const WalkInRegistration = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedWalkIn) {
-      setWalkIns(prev => prev.filter(w => w.id !== selectedWalkIn.id));
-      alert(`Walk-in record for ${selectedWalkIn.name} has been deleted.`);
+      try {
+        const response = await axiosInstance.delete(`/walk-ins/${selectedWalkIn.id}`);
+        if (response.data.success) {
+          // Refresh the list after successful deletion
+          await fetchWalkIns();
+          alert(`Walk-in record for ${selectedWalkIn.name} has been deleted.`);
+        } else {
+          alert(response.data.message || 'Failed to delete walk-in registration');
+        }
+      } catch (err) {
+        alert(err.message || 'An error occurred while deleting the walk-in registration');
+      }
     }
     setIsDeleteModalOpen(false);
     setSelectedWalkIn(null);
@@ -129,9 +140,7 @@ const WalkInRegistration = () => {
     return date.toLocaleDateString('en-US', options);
   };
 
-  const getNextId = () => {
-    return walkIns.length > 0 ? Math.max(...walkIns.map(w => w.id)) + 1 : 1;
-  };
+
 
   // Component for the view modal content
   const WalkInViewContent = ({ walkIn }) => {
@@ -145,7 +154,7 @@ const WalkInRegistration = () => {
           <p className="text-muted mb-2">Walk-in Registration</p>
           <div className="mt-2">
             <span className="badge bg-primary-subtle text-primary-emphasis px-3 py-1">
-              Registered on {formatDateTime(walkIn.registered_at)}
+              Registered on {formatDateTime(walkIn.registeredAt)}
             </span>
           </div>
         </div>
@@ -190,7 +199,7 @@ const WalkInRegistration = () => {
                 </div>
                 <div>
                   <h6 className="mb-1">Preferred Membership Plan</h6>
-                  <p className="mb-0 fw-bold">{walkIn.preferred_membership_plan || <span className="text-muted">Not specified</span>}</p>
+                  <p className="mb-0 fw-bold">{walkIn.preferredMembershipPlanName || <span className="text-muted">Not specified</span>}</p>
                 </div>
               </div>
             </div>
@@ -203,7 +212,7 @@ const WalkInRegistration = () => {
                 </div>
                 <div>
                   <h6 className="mb-1">Interested In</h6>
-                  <p className="mb-0 fw-bold">{walkIn.interested_in || <span className="text-muted">Not specified</span>}</p>
+                  <p className="mb-0 fw-bold">{walkIn.interestedIn || <span className="text-muted">Not specified</span>}</p>
                 </div>
               </div>
             </div>
@@ -218,7 +227,7 @@ const WalkInRegistration = () => {
             </h5>
             <div className="p-3 bg-light rounded">
               <p className="mb-0 fs-5 fw-bold">
-                {walkIn.preferred_time ? formatDateTime(walkIn.preferred_time) : <span className="text-muted">Not specified</span>}
+                {walkIn.preferredTime ? formatDateTime(walkIn.preferredTime) : <span className="text-muted">Not specified</span>}
               </p>
             </div>
           </div>
@@ -239,6 +248,53 @@ const WalkInRegistration = () => {
         </div>
       </div>
     );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Get form values using FormData
+    const form = e.target;
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    // Transform data to match backend expectations
+    const transformedData = {
+      name: data.name,
+      phone: data.phone,
+      email: data.email || undefined,
+      preferredMembershipPlanId: data.preferredMembershipPlanId ? parseInt(data.preferredMembershipPlanId) : undefined,
+      interestedIn: data.interested_in || undefined,
+      preferredTime: data.preferredTime || undefined,
+      notes: data.notes || undefined,
+      branchId: user?.branchId
+    };
+
+    try {
+      if (modalType === 'add') {
+        const response = await axiosInstance.post('/walk-ins', transformedData);
+        if (response.data.success) {
+          // Refresh the list after successful addition
+          await fetchWalkIns();
+          alert('New walk-in registration added successfully!');
+          closeModal();
+        } else {
+          alert(response.data.message || 'Failed to add walk-in registration');
+        }
+      } else if (modalType === 'edit' && selectedWalkIn) {
+        const response = await axiosInstance.put(`/walk-ins/${selectedWalkIn.id}`, transformedData);
+        if (response.data.success) {
+          // Refresh the list after successful update
+          await fetchWalkIns();
+          alert('Walk-in registration updated successfully!');
+          closeModal();
+        } else {
+          alert(response.data.message || 'Failed to update walk-in registration');
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'An error occurred while saving the walk-in registration');
+    }
   };
 
   return (
@@ -295,64 +351,96 @@ const WalkInRegistration = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card shadow-sm border-0">
-        <div className="table-responsive">
-          <table className="table table-hover align-middle mb-0">
-            <thead className="bg-light">
-              <tr>
-                <th className="fw-semibold">NAME</th>
-                <th className="fw-semibold">PHONE</th>
-                <th className="fw-semibold">EMAIL</th>
-                <th className="fw-semibold">PREFERRED PLAN</th>
-                <th className="fw-semibold">INTERESTED IN</th>
-                <th className="fw-semibold">PREFERRED TIME</th>
-                <th className="fw-semibold text-center">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {walkIns.map((walkIn) => (
-                <tr key={walkIn.id}>
-                  <td><strong>{walkIn.name}</strong></td>
-                  <td>{walkIn.phone}</td>
-                  <td>{walkIn.email || <span className="text-muted">—</span>}</td>
-                  <td>{walkIn.preferred_membership_plan || <span className="text-muted">—</span>}</td>
-                  <td>{walkIn.interested_in || <span className="text-muted">—</span>}</td>
-                  <td>{formatDateTime(walkIn.preferred_time)}</td>
-                  <td className="text-center">
-                    <div className="d-flex justify-content-center flex-nowrap" style={{ gap: '4px' }}>
-                      <button
-                        className="btn btn-sm btn-outline-secondary action-btn"
-                        title="View"
-                        onClick={() => handleView(walkIn)}
-                        style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <FaEye size={14} />
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-primary action-btn"
-                        title="Edit"
-                        onClick={() => handleEdit(walkIn)}
-                        style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <FaEdit size={14} />
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-danger action-btn"
-                        title="Delete"
-                        onClick={() => handleDeleteClick(walkIn)}
-                        style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <FaTrashAlt size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Loading State */}
+      {loading && (
+        <div className="d-flex justify-content-center align-items-center" style={{ height: '200px' }}>
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+          <button 
+            className="btn btn-sm btn-outline-danger ms-2" 
+            onClick={fetchWalkIns}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && !error && (
+        <div className="card shadow-sm border-0">
+          <div className="table-responsive">
+            <table className="table table-hover align-middle mb-0">
+              <thead className="bg-light">
+                <tr>
+                  <th className="fw-semibold">NAME</th>
+                  <th className="fw-semibold">PHONE</th>
+                  <th className="fw-semibold">EMAIL</th>
+                  <th className="fw-semibold">PREFERRED PLAN</th>
+                  <th className="fw-semibold">INTERESTED IN</th>
+                  <th className="fw-semibold">PREFERRED TIME</th>
+                  <th className="fw-semibold text-center">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {walkIns.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-4 text-muted">
+                      No walk-in registrations found.
+                    </td>
+                  </tr>
+                ) : (
+                  walkIns.map((walkIn) => (
+                    <tr key={walkIn.id}>
+                      <td><strong>{walkIn.name}</strong></td>
+                      <td>{walkIn.phone}</td>
+                      <td>{walkIn.email || <span className="text-muted">—</span>}</td>
+                  <td>{walkIn.preferredMembershipPlanName || <span className="text-muted">—</span>}</td>
+                      <td>{walkIn.interestedIn || <span className="text-muted">—</span>}</td>
+                      <td>{formatDateTime(walkIn.preferredTime)}</td>
+                      <td className="text-center">
+                        <div className="d-flex justify-content-center flex-nowrap" style={{ gap: '4px' }}>
+                          <button
+                            className="btn btn-sm btn-outline-secondary action-btn"
+                            title="View"
+                            onClick={() => handleView(walkIn)}
+                            style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <FaEye size={14} />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-primary action-btn"
+                            title="Edit"
+                            onClick={() => handleEdit(walkIn)}
+                            style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <FaEdit size={14} />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger action-btn"
+                            title="Delete"
+                            onClick={() => handleDeleteClick(walkIn)}
+                            style={{ width: '32px', height: '32px', padding: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <FaTrashAlt size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* MAIN MODAL (Add/Edit/View) */}
       {isModalOpen && (
@@ -379,13 +467,14 @@ const WalkInRegistration = () => {
                 {modalType === 'view' ? (
                   <WalkInViewContent walkIn={selectedWalkIn} />
                 ) : (
-                  <form>
+                  <form onSubmit={handleSubmit}>
                     {/* Name & Phone */}
                     <div className="row mb-3 g-3">
                       <div className="col-12 col-md-6">
                         <label className="form-label">Full Name <span className="text-danger">*</span></label>
                         <input
                           type="text"
+                          name="name"
                           className="form-control rounded-3"
                           placeholder="Enter full name"
                           defaultValue={selectedWalkIn?.name || ''}
@@ -397,6 +486,7 @@ const WalkInRegistration = () => {
                         <label className="form-label">Phone Number <span className="text-danger">*</span></label>
                         <input
                           type="tel"
+                          name="phone"
                           className="form-control rounded-3"
                           placeholder="+91 98765 43210"
                           defaultValue={selectedWalkIn?.phone || ''}
@@ -410,6 +500,7 @@ const WalkInRegistration = () => {
                       <label className="form-label">Email Address</label>
                       <input
                         type="email"
+                        name="email"
                         className="form-control rounded-3"
                         placeholder="example@email.com"
                         defaultValue={selectedWalkIn?.email || ''}
@@ -421,12 +512,15 @@ const WalkInRegistration = () => {
                       <label className="form-label">Preferred Membership Plan</label>
                       <select
                         className="form-select rounded-3"
-                        defaultValue={selectedWalkIn?.preferred_membership_plan || ''}
+                        name="preferredMembershipPlanId"
+                      defaultValue={selectedWalkIn?.preferredMembershipPlan?.id || ''}
                         disabled={modalType === 'view'}
                       >
                         <option value="">Select a plan</option>
-                        {membershipPlans.map(plan => (
-                          <option key={plan} value={plan}>{plan}</option>
+                        {plans.map(plan => (
+                          <option key={plan.id} value={plan.id}>
+                            {plan.plan_name} - {plan.duration_days} days - ₹{plan.price_cents / 100}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -442,7 +536,7 @@ const WalkInRegistration = () => {
                               name="interested_in"
                               id={`interested_${option.replace(/\s+/g, '_')}`}
                               value={option}
-                              defaultChecked={selectedWalkIn?.interested_in === option}
+                              defaultChecked={selectedWalkIn?.interestedIn === option}
                               disabled={modalType === 'view'}
                             />
                             <label
@@ -460,8 +554,9 @@ const WalkInRegistration = () => {
                       <label className="form-label">Preferred Time</label>
                       <input
                         type="datetime-local"
+                        name="preferredTime"
                         className="form-control rounded-3"
-                        defaultValue={selectedWalkIn?.preferred_time ? selectedWalkIn.preferred_time.slice(0, 16) : ''}
+                        defaultValue={selectedWalkIn?.preferredTime ? selectedWalkIn.preferredTime.slice(0, 16) : ''}
                         readOnly={modalType === 'view'}
                       />
                     </div>
@@ -469,6 +564,7 @@ const WalkInRegistration = () => {
                     <div className="mb-4">
                       <label className="form-label">Notes</label>
                       <textarea
+                        name="notes"
                         className="form-control rounded-3"
                         rows="3"
                         placeholder="Any additional information..."
@@ -487,7 +583,7 @@ const WalkInRegistration = () => {
                       </button>
                       {modalType !== 'view' && (
                         <button
-                          type="button"
+                          type="submit"
                           className="btn w-100 w-sm-auto"
                           style={{
                             backgroundColor: '#6EB2CC',
@@ -496,36 +592,6 @@ const WalkInRegistration = () => {
                             borderRadius: '8px',
                             padding: '10px 20px',
                             fontWeight: '500',
-                          }}
-                          onClick={() => {
-                            const formData = {
-                              name: document.querySelector('[name="name"]')?.value || document.querySelector('input[placeholder="Enter full name"]')?.value,
-                              phone: document.querySelector('[name="phone"]')?.value || document.querySelector('input[placeholder="+91 98765 43210"]')?.value,
-                              email: document.querySelector('[name="email"]')?.value || '',
-                              preferred_membership_plan: document.querySelector('[name="preferred_membership_plan"]')?.value || '',
-                              interested_in: document.querySelector('input[name="interested_in"]:checked')?.value || '',
-                              preferred_time: document.querySelector('[name="preferred_time"]')?.value || '',
-                              notes: document.querySelector('textarea')?.value || '',
-                              registered_at: new Date().toISOString()
-                            };
-                            if (modalType === 'add') {
-                              const newWalkIn = {
-                                id: getNextId(),
-                                ...formData
-                              };
-                              setWalkIns(prev => [...prev, newWalkIn]);
-                              alert('New walk-in registration added successfully!');
-                            } else if (modalType === 'edit' && selectedWalkIn) {
-                              const updatedWalkIn = {
-                                ...selectedWalkIn,
-                                ...formData
-                              };
-                              setWalkIns(prev =>
-                                prev.map(w => w.id === selectedWalkIn.id ? updatedWalkIn : w)
-                              );
-                              alert('Walk-in registration updated successfully!');
-                            }
-                            closeModal();
                           }}
                         >
                           {modalType === 'add' ? 'Register Walk-in' : 'Update Registration'}

@@ -1,9 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
-
 const prisma = new PrismaClient();
 
 const getAllStaffRoles = async () => {
-  return await prisma.staffRole.findMany({
+  return prisma.staffRole.findMany({
     select: {
       id: true,
       name: true,
@@ -11,17 +10,28 @@ const getAllStaffRoles = async () => {
       createdAt: true,
       updatedAt: true,
     },
+    orderBy: { id: 'asc' }
   });
 };
 
 const createStaffRole = async (data) => {
   const { name, description } = data;
 
-  return await prisma.staffRole.create({
-    data: {
-      name,
-      description,
-    },
+  if (!name || name.trim() === "") {
+    throw new Error("Role name is required");
+  }
+
+  // prevent duplicate role names
+  const exists = await prisma.staffRole.findUnique({
+    where: { name },
+  });
+
+  if (exists) {
+    throw new Error("Role name already exists");
+  }
+
+  return prisma.staffRole.create({
+    data: { name, description },
     select: {
       id: true,
       name: true,
@@ -35,12 +45,9 @@ const createStaffRole = async (data) => {
 const updateStaffRole = async (id, data) => {
   const { name, description } = data;
 
-  return await prisma.staffRole.update({
-    where: { id: parseInt(id) },
-    data: {
-      name,
-      description,
-    },
+  return prisma.staffRole.update({
+    where: { id },
+    data: { name, description },
     select: {
       id: true,
       name: true,
@@ -52,7 +59,9 @@ const updateStaffRole = async (id, data) => {
 };
 
 const deleteStaffRole = async (id) => {
-  await prisma.staffRole.delete({ where: { id: parseInt(id) } });
+  return prisma.staffRole.delete({
+    where: { id },
+  });
 };
 
 module.exports = {

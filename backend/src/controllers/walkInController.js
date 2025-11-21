@@ -14,6 +14,7 @@
 
 const walkInService = require('../services/walkInService');
 const responseHandler = require('../utils/responseHandler');
+const logger = require('../utils/logger');
 
 /**
  * Get all walk-ins with optional filtering
@@ -24,17 +25,18 @@ const getWalkIns = async (req, res, next) => {
   try {
     // Extract access control information from middleware
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
-    const { search } = req.query; // Get search term from query params
+    const { search, branchId } = req.query; // Get search term and branchId from query params
 
-    console.log(`👤 WalkIn Controller - Get walk-ins - Role: ${userRole}, Branch: ${userBranchId}, Search: ${search}`);
+    console.log(`👤 WalkIn Controller - Get walk-ins - Role: ${userRole}, Branch: ${userBranchId}, Search: ${search}, Requested Branch: ${branchId}`);
 
     let walkIns;
     if (isSuperAdmin) {
-      // SuperAdmin can see all walk-ins
-      walkIns = await walkInService.getWalkIns(null, search);
+      // SuperAdmin can see all walk-ins or filter by specific branch if provided
+      const filterBranchId = branchId ? parseInt(branchId) : null;
+      walkIns = await walkInService.getWalkIns(filterBranchId, search);
       console.log(`👤 SuperAdmin fetched walk-ins - Count: ${walkIns.length}`);
     } else {
-      // Other roles see walk-ins from their branch only
+      // Other roles see walk-ins from their branch only, ignore any branchId param
       walkIns = await walkInService.getWalkIns(userBranchId, search);
       console.log(`👤 User fetched branch walk-ins - Count: ${walkIns.length}`);
     }
@@ -55,6 +57,11 @@ const createWalkIn = async (req, res, next) => {
   try {
     const walkInData = req.body;
 
+    // Basic input validation
+    if (!walkInData.name || !walkInData.phone || !walkInData.branchId) {
+      return responseHandler.error(res, 'Missing required fields: name, phone, and branchId are required', 400);
+    }
+
     // Ensure walk-in is created in the admin's branch
     const { userRole, userBranchId } = req.accessFilters;
     if (userRole === 'admin' && !walkInData.branchId) {
@@ -65,6 +72,7 @@ const createWalkIn = async (req, res, next) => {
     const walkIn = await walkInService.createWalkIn(walkInData, createdById);
     responseHandler.success(res, 'Walk-in registration created successfully', { walkIn });
   } catch (error) {
+    logger.error('Error creating walk-in:', error);
     next(error);
   }
 };
@@ -98,6 +106,7 @@ const getWalkInById = async (req, res, next) => {
     const walkIn = await walkInService.getWalkInById(id, userBranchId, userRole);
     responseHandler.success(res, 'Walk-in registration fetched successfully', { walkIn });
   } catch (error) {
+    logger.error('Error fetching walk-in by ID:', error);
     next(error);
   }
 };
@@ -114,6 +123,7 @@ const deleteWalkIn = async (req, res, next) => {
     await walkInService.deleteWalkIn(id, userBranchId);
     responseHandler.success(res, 'Walk-in registration deleted successfully');
   } catch (error) {
+    logger.error('Error deleting walk-in:', error);
     next(error);
   }
 };

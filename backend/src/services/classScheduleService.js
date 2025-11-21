@@ -24,7 +24,7 @@ const toArray = (value) => {
 exports.getAllClasses = async (filters = {}) => {
   const where = {};
   if (filters.branchId) where.branchId = Number(filters.branchId);
-  if (filters.trainer_id) where.trainer_id = Number(filters.trainer_id);
+  if (filters.trainerId) where.trainerId = Number(filters.trainerId);
   if (filters.status) where.status = filters.status;
 
   const list = await prisma.classSchedule.findMany({
@@ -38,8 +38,21 @@ exports.getAllClasses = async (filters = {}) => {
   });
 
   return list.map(cls => ({
-    ...cls,
-    schedule_day: toArray(cls.schedule_day),
+    id: cls.id,
+    class_name: cls.className,
+    trainer_id: cls.trainerId,
+    date: cls.date,
+    time: cls.time,
+    schedule_day: toArray(cls.scheduleDay),
+    total_sheets: cls.totalSheets,
+    status: cls.status,
+    branchId: cls.branchId,
+    adminId: cls.adminId,
+    createdAt: cls.createdAt,
+    updatedAt: cls.updatedAt,
+    trainer: cls.trainer,
+    branch: cls.branch,
+    admin: cls.admin,
   }));
 };
 
@@ -63,7 +76,7 @@ exports.getClassById = async (id, branchId = null) => {
 
   return {
     ...cls,
-    schedule_day: toArray(cls.schedule_day),
+    schedule_day: toArray(cls.scheduleDay),
   };
 };
 
@@ -79,7 +92,7 @@ exports.createClass = async (data, userId) => {
   // Check trainer conflict
   const conflict = await prisma.classSchedule.findFirst({
     where: {
-      trainer_id: Number(trainer_id),
+      trainerId: Number(trainer_id),
       date: new Date(date),
       time,
       branchId: Number(branchId),
@@ -91,12 +104,12 @@ exports.createClass = async (data, userId) => {
 
   const created = await prisma.classSchedule.create({
     data: {
-      class_name,
-      trainer_id: Number(trainer_id),
+      className: class_name,
+      trainerId: Number(trainer_id),
       date: new Date(date),
       time,
-      schedule_day: normalizeScheduleDay(schedule_day),
-      total_sheets: Number(total_sheets) || 20,
+      scheduleDay: normalizeScheduleDay(schedule_day),
+      totalSheets: Number(total_sheets) || 20,
       status: status || "Active",
       branchId: Number(branchId),
       adminId: Number(userId),
@@ -108,9 +121,25 @@ exports.createClass = async (data, userId) => {
     },
   });
 
-  logger.info(`Class created: ${class_name} by user ${userId}`);
+  logger.info(`Class created: ${created.className} by user ${userId}`);
 
-  return { ...created, schedule_day: toArray(created.schedule_day) };
+  return {
+    id: created.id,
+    class_name: created.className,
+    trainer_id: created.trainerId,
+    date: created.date,
+    time: created.time,
+    schedule_day: toArray(created.scheduleDay),
+    total_sheets: created.totalSheets,
+    status: created.status,
+    branchId: created.branchId,
+    adminId: created.adminId,
+    createdAt: created.createdAt,
+    updatedAt: created.updatedAt,
+    trainer: created.trainer,
+    branch: created.branch,
+    admin: created.admin,
+  };
 };
 
 // ============================
@@ -124,13 +153,13 @@ exports.updateClass = async (id, data, userId, branchId = null) => {
   if (!existing) throw new Error("Class not found");
 
   // If trainer/date/time changed → check conflict
-  const newTrainer = data.trainer_id ? Number(data.trainer_id) : existing.trainer_id;
+  const newTrainer = data.trainer_id ? Number(data.trainer_id) : existing.trainerId;
   const newDate = data.date ? new Date(data.date) : existing.date;
   const newTime = data.time || existing.time;
 
   const conflict = await prisma.classSchedule.findFirst({
     where: {
-      trainer_id: newTrainer,
+      trainerId: newTrainer,
       date: newDate,
       time: newTime,
       branchId: existing.branchId,
@@ -144,12 +173,12 @@ exports.updateClass = async (id, data, userId, branchId = null) => {
   const updated = await prisma.classSchedule.update({
     where: { id: Number(id) },
     data: {
-      class_name: data.class_name,
-      trainer_id: newTrainer,
+      className: data.class_name,
+      trainerId: newTrainer,
       date: newDate,
       time: newTime,
-      schedule_day: data.schedule_day ? normalizeScheduleDay(data.schedule_day) : undefined,
-      total_sheets: data.total_sheets ? Number(data.total_sheets) : undefined,
+      scheduleDay: data.schedule_day ? normalizeScheduleDay(data.schedule_day) : undefined,
+      totalSheets: data.total_sheets ? Number(data.total_sheets) : undefined,
       status: data.status,
     },
     include: {
@@ -161,7 +190,7 @@ exports.updateClass = async (id, data, userId, branchId = null) => {
 
   logger.info(`Class updated: ${updated.class_name} by user ${userId}`);
 
-  return { ...updated, schedule_day: toArray(updated.schedule_day) };
+  return { ...updated, schedule_day: toArray(updated.scheduleDay) };
 };
 
 // ============================
@@ -176,7 +205,7 @@ exports.deleteClass = async (id, userId, branchId = null) => {
 
   await prisma.classSchedule.delete({ where: { id: Number(id) } });
 
-  logger.info(`Class deleted: ${existing.class_name} by user ${userId}`);
+  logger.info(`Class deleted: ${existing.className} by user ${userId}`);
 };
 
 // ============================

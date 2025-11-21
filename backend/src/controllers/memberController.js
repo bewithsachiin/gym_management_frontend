@@ -1,115 +1,175 @@
-const memberService = require("../services/member.service");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
+const memberService = require("../services/memberService");
 
 module.exports = {
-  // Get all members
+
+  // ----------------------------------------------------
+  // 📌 GET ALL MEMBERS
+  // ----------------------------------------------------
   getMembers: async (req, res) => {
     try {
-      const branchId = Number(req.query.branchId) || req.user.branchId;
+      const branchId = req.query.branchId || req.user.branchId;
       const search = req.query.search || "";
+      const isSuperAdmin = req.user.role === "superadmin";
 
-      const members = await memberService.getMembersService(branchId, search);
+      const members = await memberService.getMembersService(
+        branchId,
+        search,
+        isSuperAdmin
+      );
 
       return res.json({
         success: true,
         message: "Members fetched successfully",
-        data: { members },
+        data: members,
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Get single member
+
+  // ----------------------------------------------------
+  // 📌 GET SINGLE MEMBER
+  // ----------------------------------------------------
   getMemberById: async (req, res) => {
     try {
-      const member = await memberService.getMemberByIdService(req.params.id);
+      const id = req.params.id;
+      const branchId = req.user.branchId;
+      const isSuperAdmin = req.user.role === "superadmin";
 
-      if (!member)
-        return res.status(404).json({ success: false, message: "Member not found" });
+      const member = await memberService.getMemberByIdService(
+        id,
+        branchId,
+        isSuperAdmin
+      );
+
+      if (!member) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Member not found" });
+      }
 
       return res.json({
         success: true,
         message: "Member fetched successfully",
-        data: { member },
+        data: member,
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Create member
+
+  // ----------------------------------------------------
+  // 📌 CREATE MEMBER
+  // ----------------------------------------------------
   createMember: async (req, res) => {
     try {
-      const body = req.body;
+      const data = req.body;
 
-      // Cloudinary URL
-      if (req.file) body.photo = req.file.path;
+      // Add image (Cloudinary)
+      if (req.file) data.photo = req.file.path;
 
-      body.password = await bcrypt.hash(body.password, 10);
+      // Hash password
+      if (data.password) {
+        data.password = await bcrypt.hash(data.password, 10);
+      }
 
-      const newMember = await memberService.createMemberService(body);
+      // Force user role to "member" (secure)
+      data.role = "member";
+
+      const newMember = await memberService.createMemberService(data);
 
       return res.status(201).json({
         success: true,
         message: "Member created successfully",
-        data: { member: newMember },
+        data: newMember,
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Update member
+
+  // ----------------------------------------------------
+  // 📌 UPDATE MEMBER
+  // ----------------------------------------------------
   updateMember: async (req, res) => {
     try {
-      const body = req.body;
+      const id = req.params.id;
+      const data = req.body;
 
-      // Only update image if new one uploaded
-      if (req.file) body.photo = req.file.path;
-
-      if (body.password) {
-        body.password = await bcrypt.hash(body.password, 10);
-      } else {
-        delete body.password;
+      // Update image only if new file uploaded
+      if (req.file) {
+        data.photo = req.file.path;
       }
 
-      const updated = await memberService.updateMemberService(req.params.id, body);
+      // Update password (hash if sent)
+      if (data.password) {
+        data.password = await bcrypt.hash(data.password, 10);
+      } else {
+        delete data.password; // prevent setting empty password
+      }
+
+      const updatedMember = await memberService.updateMemberService(id, data);
 
       return res.json({
         success: true,
         message: "Member updated successfully",
-        data: { member: updated },
+        data: updatedMember,
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Toggle activation
-  toggleActivation: async (req, res) => {
+
+  // ----------------------------------------------------
+  // 📌 ACTIVATE / DEACTIVATE MEMBER
+  // ----------------------------------------------------
+  activateMember: async (req, res) => {
     try {
-      const updated = await memberService.toggleActivationService(req.params.id);
+      const id = req.params.id;
+
+      const updated = await memberService.activateMemberService(id);
+
+      if (!updated)
+        return res.status(404).json({
+          success: false,
+          message: "Member not found",
+        });
 
       return res.json({
         success: true,
-        message: "Member activation updated",
-        data: { member: updated },
+        message: "Member activation status updated",
+        data: updated,
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Delete member
+
+  // ----------------------------------------------------
+  // 📌 DELETE MEMBER
+  // ----------------------------------------------------
   deleteMember: async (req, res) => {
     try {
-      await memberService.deleteMemberService(req.params.id);
+      const id = req.params.id;
+
+      await memberService.deleteMemberService(id);
 
       return res.json({
         success: true,
         message: "Member deleted successfully",
       });
+
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }

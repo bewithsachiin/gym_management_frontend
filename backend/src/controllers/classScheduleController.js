@@ -90,8 +90,8 @@ exports.deleteClass = async (req, res, next) => {
 // =========================
 exports.getTrainers = async (req, res, next) => {
   try {
-    const { branchId, role } = req.user;
-    const trainers = await classService.getTrainers(role !== 'superadmin' ? branchId : null);
+    const { branchId } = req.user;
+    const trainers = await classService.getTrainers(branchId);
 
     responseHandler.success(res, "Trainers fetched successfully", { trainers });
   } catch (err) {
