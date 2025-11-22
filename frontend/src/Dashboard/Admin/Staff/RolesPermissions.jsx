@@ -1,21 +1,44 @@
-// src/components/ManageRoles.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FaEdit, FaTrashAlt, FaPlus } from 'react-icons/fa';
+import axiosInstance from '../../../utils/axiosInstance';
+
 
 const ManageRoles = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modalType, setModalType] = useState('add'); // 'add', 'edit'
   const [selectedRole, setSelectedRole] = useState(null);
+  const [roles, setRoles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const roleInputs = useRef({});
 
-  // Sample Roles with Permissions
-  const [roles, setRoles] = useState([
-    { id: 1, role_name: "Manager", role_description: "Branch operations manager", permissions_json: { dashboard: true, members: true, staff: true, finance: true, settings: false } },
-    { id: 2, role_name: "Trainer", role_description: "Fitness instructor", permissions_json: { dashboard: true, members: true, staff: false, finance: false, settings: false } },
-    { id: 3, role_name: "Receptionist", role_description: "Front desk operations", permissions_json: { dashboard: true, members: true, staff: false, finance: false, settings: false } },
-    { id: 4, role_name: "Housekeeping", role_description: "Cleaning & maintenance", permissions_json: { dashboard: false, members: false, staff: false, finance: false, settings: false } }
-  ]);
+  // Fetch roles from API
+  const fetchRoles = async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get('/staff-roles');
+      if (response.data.success) {
+        // Transform backend data to match frontend structure
+        const transformedRoles = response.data.data.roles.map(role => ({
+          id: role.id,
+          role_name: role.name,
+          role_description: role.description,
+          permissions_json: role.permissions || {}
+        }));
+        setRoles(transformedRoles);
+      }
+    } catch (err) {
+      setError('Failed to fetch roles');
+      console.error('Error fetching roles:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
 
   // ===== HANDLERS =====
   const handleAddNew = () => {
@@ -35,10 +58,18 @@ const ManageRoles = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedRole) {
-      setRoles(prev => prev.filter(r => r.id !== selectedRole.id));
-      alert(`Role "${selectedRole.role_name}" has been deleted.`);
+      try {
+        const response = await axiosInstance.delete(`/staff-roles/${selectedRole.id}`);
+        if (response.data.success) {
+          setRoles(prev => prev.filter(r => r.id !== selectedRole.id));
+          alert(`Role "${selectedRole.role_name}" has been deleted.`);
+        }
+      } catch (err) {
+        alert('Failed to delete role');
+        console.error('Error deleting role:', err);
+      }
     }
     setIsDeleteModalOpen(false);
     setSelectedRole(null);
@@ -81,12 +112,35 @@ const ManageRoles = () => {
 
   // ✅ Get only allowed permission names as comma-separated string
   const getAllowedPermissionNames = (permissions) => {
+    if (!permissions || typeof permissions !== 'object') return "—";
     const allowed = Object.keys(permissions).filter(key => permissions[key]);
     if (allowed.length === 0) return "—";
     return allowed.map(k => k.charAt(0).toUpperCase() + k.slice(1)).join(", ");
   };
 
   // ===== JSX =====
+  if (loading) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="text-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container-fluid p-4">
       {/* Header */}
@@ -259,7 +313,7 @@ const ManageRoles = () => {
                         padding: '10px 20px',
                         fontWeight: '500',
                       }}
-                      onClick={() => {
+                      onClick={async () => {
                         const roleName = roleInputs.current.roleName?.value.trim();
                         const description = roleInputs.current.description?.value.trim();
                         const permissions = {
@@ -275,21 +329,46 @@ const ManageRoles = () => {
                           return;
                         }
 
-                        if (selectedRole) {
-                          setRoles(prev => prev.map(r => r.id === selectedRole.id ? { ...r, role_name: roleName, role_description: description, permissions_json: permissions } : r));
-                          alert("Role updated successfully!");
-                        } else {
-                          const newRole = {
-                            id: Math.max(...roles.map(r => r.id), 0) + 1,
-                            role_name: roleName,
-                            role_description: description,
-                            permissions_json: permissions
+                        try {
+                          const payload = {
+                            name: roleName,
+                            description: description,
+                            permissions: permissions,
+                            status: "Active"
                           };
-                          setRoles(prev => [...prev, newRole]);
-                          alert("Role created successfully!");
-                        }
 
-                        closeModal();
+                          if (selectedRole) {
+                            // Update role
+                            const response = await axiosInstance.put(`/staff-roles/${selectedRole.id}`, payload);
+                            if (response.data.success) {
+                              setRoles(prev => prev.map(r => r.id === selectedRole.id ? {
+                                ...r,
+                                role_name: roleName,
+                                role_description: description,
+                                permissions_json: permissions
+                              } : r));
+                              alert("Role updated successfully!");
+                            }
+                          } else {
+                            // Create role
+                            const response = await axiosInstance.post('/staff-roles', payload);
+                            if (response.data.success) {
+                              const newRole = {
+                                id: response.data.data.role.id,
+                                role_name: roleName,
+                                role_description: description,
+                                permissions_json: permissions
+                              };
+                              setRoles(prev => [...prev, newRole]);
+                              alert("Role created successfully!");
+                            }
+                          }
+
+                          closeModal();
+                        } catch (err) {
+                          alert('Failed to save role');
+                          console.error('Error saving role:', err);
+                        }
                       }}
                     >
                       {selectedRole ? 'Update Role' : 'Create Role'}
@@ -360,7 +439,7 @@ const ManageRoles = () => {
           </div>
         </div>
       )}
-      
+
       <style jsx global>{`
         .action-btn {
           width: 36px;
@@ -370,19 +449,19 @@ const ManageRoles = () => {
           align-items: center;
           justify-content: center;
         }
-        
+
         @media (max-width: 768px) {
           .action-btn {
             width: 32px;
             height: 32px;
           }
         }
-        
+
         /* Make form controls responsive */
         .form-control, .form-select, .form-check {
           width: 100%;
         }
-        
+
         /* Ensure modal content is responsive */
         @media (max-width: 576px) {
           .modal-dialog {
@@ -396,7 +475,7 @@ const ManageRoles = () => {
             margin-bottom: 0.5rem;
           }
         }
-        
+
         /* Responsive table */
         @media (max-width: 768px) {
           .table thead th {

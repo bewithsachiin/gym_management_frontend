@@ -8,12 +8,12 @@ module.exports = {
   // ----------------------------------------------------
   getMembers: async (req, res) => {
     try {
-      const branchId = req.query.branchId || req.user.branchId;
+      // Use access filters from middleware
+      const { userBranchId, isSuperAdmin } = req.accessFilters;
       const search = req.query.search || "";
-      const isSuperAdmin = req.user.role === "superadmin";
 
       const members = await memberService.getMembersService(
-        branchId,
+        userBranchId,
         search,
         isSuperAdmin
       );
@@ -81,6 +81,12 @@ module.exports = {
       // Force user role to "member" (secure)
       data.role = "member";
 
+      // Set branchId from access filters for admin
+      const { userRole, userBranchId } = req.accessFilters;
+      if (userRole === "admin" && !data.branchId) {
+        data.branchId = userBranchId;
+      }
+
       const newMember = await memberService.createMemberService(data);
 
       return res.status(201).json({
@@ -113,6 +119,12 @@ module.exports = {
         data.password = await bcrypt.hash(data.password, 10);
       } else {
         delete data.password; // prevent setting empty password
+      }
+
+      // Ensure branch cannot be changed for admin users
+      const { userRole } = req.accessFilters;
+      if (userRole === "admin") {
+        delete data.branchId; // Prevent branch changes
       }
 
       const updatedMember = await memberService.updateMemberService(id, data);

@@ -14,7 +14,7 @@ const getAllBranches = async () => {
       email: true,
       status: true,
       hours: true,
-      branch_image: true,
+      branchImage: true,
       createdAt: true,
       updatedAt: true,
       admin: {
@@ -33,12 +33,38 @@ const getAllBranches = async () => {
           email: true,
         },
       },
+      settings: {
+        select: {
+          operatingHours: true,
+          holidays: true,
+          notifications_enabled: true,
+          sms_notifications_enabled: true,
+          in_app_notifications_enabled: true,
+          notification_message: true,
+        },
+      },
     },
   });
 };
 
 const createBranch = async (data, createdById) => {
-  const { name, code, address, phone, email, status, hours, branch_image, adminId } = data;
+  const {
+    name,
+    code,
+    address,
+    phone,
+    email,
+    status,
+    hours,
+    branch_image,
+    adminId,
+    operatingHours,
+    holidays,
+    notifications_enabled,
+    sms_notifications_enabled,
+    in_app_notifications_enabled,
+    notification_message
+  } = data;
 
   // adminId is now optional
   let adminIdValue = null;
@@ -81,6 +107,16 @@ const createBranch = async (data, createdById) => {
         branch_image,
         adminId: adminIdValue,
         createdById: createdById ? parseInt(createdById) : null,
+        settings: {
+          create: {
+            operatingHours,
+            holidays,
+            notifications_enabled,
+            sms_notifications_enabled,
+            in_app_notifications_enabled,
+            notification_message,
+          },
+        },
       },
       select: {
         id: true,
@@ -91,7 +127,7 @@ const createBranch = async (data, createdById) => {
         email: true,
         status: true,
         hours: true,
-        branch_image: true,
+        branchImage: true,
         createdAt: true,
         updatedAt: true,
         createdBy: {
@@ -100,6 +136,16 @@ const createBranch = async (data, createdById) => {
             firstName: true,
             lastName: true,
             email: true,
+          },
+        },
+        settings: {
+          select: {
+            operatingHours: true,
+            holidays: true,
+            notifications_enabled: true,
+            sms_notifications_enabled: true,
+            in_app_notifications_enabled: true,
+            notification_message: true,
           },
         },
       },
@@ -120,7 +166,22 @@ const createBranch = async (data, createdById) => {
 };
 
 const updateBranch = async (id, data) => {
-  const { name, code, address, phone, email, status, hours, branch_image } = data;
+  const {
+    name,
+    code,
+    address,
+    phone,
+    email,
+    status,
+    hours,
+    branch_image,
+    operatingHours,
+    holidays,
+    notifications_enabled,
+    sms_notifications_enabled,
+    in_app_notifications_enabled,
+    notification_message
+  } = data;
 
   // Map status to enum
   const statusEnum = status === 'Active' ? 'ACTIVE' : status === 'Inactive' ? 'INACTIVE' : status === 'Maintenance' ? 'MAINTENANCE' : 'INACTIVE';
@@ -132,15 +193,35 @@ const updateBranch = async (id, data) => {
     phone,
     email,
     status: statusEnum,
-    hours,
-    branch_image,
+        hours,
+        branchImage: branch_image,
+        settings: {
+      upsert: {
+        create: {
+          operatingHours,
+          holidays,
+          notifications_enabled,
+          sms_notifications_enabled,
+          in_app_notifications_enabled,
+          notification_message,
+        },
+        update: {
+          operatingHours,
+          holidays,
+          notifications_enabled,
+          sms_notifications_enabled,
+          in_app_notifications_enabled,
+          notification_message,
+        },
+      },
+    },
   };
 
   // If new image, delete old one from Cloudinary
   if (branch_image) {
     const existingBranch = await prisma.branch.findUnique({ where: { id: parseInt(id) } });
     if (existingBranch && existingBranch.branch_image) {
-      const publicId = existingBranch.branch_image.split('/').pop().split('.')[0];
+      const publicId = existingBranch.branchImage.split('/').pop().split('.')[0];
       await cloudinary.uploader.destroy(publicId);
     }
   }
@@ -148,26 +229,36 @@ const updateBranch = async (id, data) => {
   return await prisma.branch.update({
     where: { id: parseInt(id) },
     data: updateData,
-    select: {
-      id: true,
-      name: true,
-      code: true,
-      address: true,
-      phone: true,
-      email: true,
-      status: true,
-      hours: true,
-      branch_image: true,
-      createdAt: true,
-      updatedAt: true,
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        address: true,
+        phone: true,
+        email: true,
+        status: true,
+        hours: true,
+        branchImage: true,
+        createdAt: true,
+        updatedAt: true,
+        settings: {
+        select: {
+          operatingHours: true,
+          holidays: true,
+          notifications_enabled: true,
+          sms_notifications_enabled: true,
+          in_app_notifications_enabled: true,
+          notification_message: true,
+        },
+      },
     },
   });
 };
 
 const deleteBranch = async (id) => {
   const branch = await prisma.branch.findUnique({ where: { id: parseInt(id) } });
-  if (branch && branch.branch_image) {
-    const publicId = branch.branch_image.split('/').pop().split('.')[0];
+  if (branch && branch.branchImage) {
+    const publicId = branch.branchImage.split('/').pop().split('.')[0];
     await cloudinary.uploader.destroy(publicId);
   }
 
@@ -186,7 +277,7 @@ const getBranchById = async (id) => {
       email: true,
       status: true,
       hours: true,
-      branch_image: true,
+      branchImage: true,
       createdAt: true,
       updatedAt: true,
     },

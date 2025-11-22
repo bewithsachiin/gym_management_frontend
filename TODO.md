@@ -1,10 +1,10 @@
-# Restrict ManageStaff to User's Branch
+# TODO: Implement Branch Management Backend with Notifications
 
-## Tasks
-- [ ] Modify fetchStaff to filter by user's branchId: axiosInstance.get(`/staff?branchId=${branchId}`)
-- [ ] In handleFormSubmit, force apiData.branchId = branchId; (ignore formData.branchId)
-- [ ] Remove branch selection field from form (since fixed to user's branch)
-- [ ] Update header description to indicate branch restriction
-- [ ] Test fetching staff (should only show user's branch staff)
-- [ ] Test adding staff (should assign to user's branch)
-- [ ] Test editing staff (only user's branch staff editable)
+## Steps to Complete
+
+- [ ] Update Prisma schema: Add optional notification fields (notifications_enabled, sms_notifications_enabled, in_app_notifications_enabled, notification_message) to BranchSettings model
+- [ ] Update branchService.js: Include BranchSettings in getAllBranches, createBranch, updateBranch queries
+- [ ] Update branchController.js: Handle new fields in create/update operations
+- [ ] Run Prisma migration after schema update
+- [ ] Test API endpoints to ensure new fields are handled correctly
+- [ ] Update frontend to integrate with new backend (if needed, but focus on backend first)

@@ -204,10 +204,13 @@ model User {
   dutyRostersApproved DutyRoster[] @relation("DutyRosterApprovedBy")
   trainerDashboards   GeneralTrainerDashboard[] @relation("TrainerDashboard")
   memberFeedbacks     MemberFeedback[]          @relation("FeedbackTrainer")
-  salariesApproved    Salary[]     @relation("SalaryApprovedBy")
-  receptionistBookings ReceptionistBooking[]
-  payments             Payment[] @relation("PaymentMember")
-  createdPayments      Payment[] @relation("PaymentCreatedBy")
+  salariesApproved       Salary[]             @relation("SalaryApprovedBy")
+  receptionistBookings   ReceptionistBooking[] @relation("ReceptionistBookings")
+  bookingMemberRelation  ReceptionistBooking[] @relation("BookingMembers")
+  memberAttendances      MemberAttendance[]   @relation("MemberAttendanceMember")
+  feedbacks              MemberFeedback[]     @relation("FeedbackMember")
+  payments               Payment[]            @relation("PaymentMember")
+  createdPayments        Payment[]            @relation("PaymentCreatedBy")
 }
 
 // Branch model for gym branches
@@ -277,6 +280,7 @@ model Staff {
   qrChecks    QRCheck[]    @relation("QRCheckStaff")
   attendances Attendance[] @relation("AttendanceStaff")
   dutyRosters DutyRoster[] @relation("DutyRosterStaff")
+  salaries    Salary[]     @relation("SalaryStaff")
 }
 
 // Plan model for gym membership plans (global plans created by superadmin)
@@ -604,6 +608,78 @@ model MemberFeedback {
   respondedAt   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+// GeneralTrainerDashboard model for trainer dashboard data
+model GeneralTrainerDashboard {
+  id                Int       @id @default(autoincrement())
+  trainerId         Int
+  trainer           User      @relation("TrainerDashboard", fields: [trainerId], references: [id])
+  classesToday      Int?
+  membersToTrain    Int?
+  pendingFeedback   Int?
+  classesThisWeek   Int?
+  attendanceTrend   Json?
+  classDistribution Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// ReceptionistBooking model for receptionist booking management
+model ReceptionistBooking {
+  id            Int       @id @default(autoincrement())
+  receptionistId Int
+  receptionist  User      @relation("ReceptionistBookings", fields: [receptionistId], references: [id])
+  bookingType   BookingType
+  memberId      Int
+  member        User      @relation("BookingMembers", fields: [memberId], references: [id])
+  bookingDate   DateTime
+  startTime     String
+  endTime       String
+  status        BookingStatus @default(Booked)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Payment model for payment processing
+model Payment {
+  id              Int           @id @default(autoincrement())
+  paymentId       String        @unique
+  memberId        Int
+  member          User          @relation("PaymentMember", fields: [memberId], references: [id])
+  amount          Int // in cents/paise
+  currency        String        @default("INR")
+  paymentMode     PaymentMode   @default(Cash)
+  paymentStatus   PaymentStatus @default(Pending)
+  description     String?
+  transactionId   String?
+  createdById     Int?
+  createdBy       User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  branchId        Int
+  branch          Branch        @relation(fields: [branchId], references: [id])
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// BranchSettings model for branch-specific configurations
+model BranchSettings {
+  id                          Int       @id @default(autoincrement())
+  branchId                    Int       @unique
+  branch                      Branch    @relation("BranchSettings", fields: [branchId], references: [id])
+  maxClassSize                Int       @default(20)
+  maxPTSessions               Int       @default(10)
+  bookingBuffer               Int       @default(30) // minutes
+  cancellationDays            Int       @default(1) // days in advance for cancellation
+  operatingHours              Json?
+  holidays                    Json?
+  notifications_enabled       Boolean?  @default(false)
+  sms_notifications_enabled   Boolean?  @default(false)
+  in_app_notifications_enabled Boolean?  @default(false)
+  notification_message        String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 }
 
 // QRCheck model for QR code check-ins (already exists, but ensuring it's complete)

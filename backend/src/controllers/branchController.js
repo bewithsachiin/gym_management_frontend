@@ -36,6 +36,11 @@ const createBranch = async (req, res, next) => {
     if (req.user.role === 'superadmin' && !branchData.adminId) {
       branchData.adminId = req.user.id;
     }
+
+    // Handle settings fields
+    branchData.operatingHours = branchData.hours; // Map frontend field
+    branchData.holidays = branchData.holidayList ? JSON.stringify(branchData.holidayList) : null;
+
     const branch = await branchService.createBranch(branchData, req.user.id);
     responseHandler.success(res, 'Branch created successfully', { branch });
   } catch (error) {

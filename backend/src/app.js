@@ -38,6 +38,7 @@ app.use(express.json());
 const authRoutes = require('./routes/auth.routes');
 const branchRoutes = require('./routes/branchRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const salaryRoutes = require('./routes/salaryRoutes');
 const staffRoleRoutes = require('./routes/staffRoleRoutes');
 const memberRoutes = require('./routes/memberRoutes');
 const planRoutes = require('./routes/planRoutes');
@@ -47,6 +48,7 @@ const branchPlanRoutes = require('./routes/branchPlanRoutes');
 const personalTrainingSessionRoutes = require('./routes/personalTrainingSessionRoutes');
 const walkInRoutes = require('./routes/walkInRoutes');
 const personalTrainingRoutes = require('./routes/personalTrainingRoutes');
+// const dutyRosterRoutes = require('./routes/dutyRosterRoutes');
 
 
 
@@ -55,6 +57,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/branches', branchRoutes);
 app.use('/api/v1/staff', staffRoutes);
 app.use('/api/v1/staff-roles', staffRoleRoutes);
+app.use('/api/v1/salaries', salaryRoutes);
 app.use('/api/v1/members', memberRoutes);
 app.use('/api/v1/plans', planRoutes);
 app.use('/api/v1/classes', classScheduleRoutes);
@@ -63,6 +66,7 @@ app.use('/api/v1/branch-plans', branchPlanRoutes);
 app.use('/api/v1/sessions', personalTrainingSessionRoutes);
 app.use('/api/v1/walk-ins', walkInRoutes);
 app.use('/api/v1/personal-training', personalTrainingRoutes);
+// app.use('/api/v1/duty-rosters', dutyRosterRoutes);
 
 // ✅ Health check route
 app.get('/api/health', (req, res) => {

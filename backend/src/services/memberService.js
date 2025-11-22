@@ -275,9 +275,53 @@ const activateMemberService = async (id) => {
 // 📌 DELETE MEMBER
 // ----------------------------------------------------
 const deleteMemberService = async (id) => {
-  await prisma.user.delete({
-    where: { id: parseInt(id) },
+  const memberId = parseInt(id);
+
+  // Helper function: delete safely
+  const safeDeleteMany = async (model, where) => {
+    if (model?.deleteMany) {
+      await model.deleteMany({ where });
+    }
+  };
+
+  // 1. MemberAttendance
+  await safeDeleteMany(prisma.memberAttendance, { memberId });
+
+  // 2. Attendance
+  await safeDeleteMany(prisma.attendance, { memberId });
+
+  // 3. QRCheck
+  await safeDeleteMany(prisma.qrCheck, {
+    OR: [{ memberId }, { scannedBy: memberId }]
   });
+
+  // 4. PlanBooking
+  await safeDeleteMany(prisma.planBooking, { memberId });
+
+  // 5. MemberPlan
+  await safeDeleteMany(prisma.memberPlan, { memberId });
+
+  // 6. BranchPlanBooking
+  await safeDeleteMany(prisma.branchPlanBooking, { memberId });
+
+  // 7. MemberBranchPlan
+  await safeDeleteMany(prisma.memberBranchPlan, { memberId });
+
+  // 8. PersonalTrainingSession
+  await safeDeleteMany(prisma.personalTrainingSession, { memberId });
+
+  // 9. MemberFeedback
+  await safeDeleteMany(prisma.memberFeedback, { memberId });
+
+  // 10. Payment
+  await safeDeleteMany(prisma.payment, { memberId });
+
+  // 11. Finally delete User (safe)
+  if (prisma.user?.delete) {
+    await prisma.user.delete({
+      where: { id: memberId },
+    });
+  }
 };
 
 module.exports = {

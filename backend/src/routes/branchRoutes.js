@@ -17,7 +17,7 @@ const { accessControl, checkPermission } = require('../middlewares/accessControl
 const protect = [authenticateToken, accessControl()];
 
 // Only superadmin allowed
-const superAdminOnly = [authenticateToken, accessControl(), checkPermission(['superadmin'])];
+const superAdminOnly = [authenticateToken, accessControl(), checkPermission(['superadmin','admin'])];
 
 // ----------------------------------------
 // Branch Routes

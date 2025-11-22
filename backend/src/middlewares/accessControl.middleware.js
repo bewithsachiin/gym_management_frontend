@@ -113,9 +113,10 @@ const accessControl = (options = {}) => {
 /**
  * Permission checker for specific actions
  */
-const checkPermission = (requiredRoles = [], options = {}) => {
-  return (req, res, next) => {
+const checkPermission = (requiredRoles = [], requiredPermissions = [], options = {}) => {
+  return async (req, res, next) => {
     const userRole = req.accessFilters?.userRole;
+    const userId = req.accessFilters?.userId;
 
     if (!userRole) {
       return res.status(401).json({ success: false, message: 'Access filters not set' });
@@ -128,9 +129,41 @@ const checkPermission = (requiredRoles = [], options = {}) => {
     }
 
     // Check if user role is in required roles
-    if (!requiredRoles.includes(userRole)) {
-      console.log(`🚫 Permission denied - Required: ${requiredRoles.join(', ')}, User: ${userRole}`);
+    if (requiredRoles.length > 0 && !requiredRoles.includes(userRole)) {
+      console.log(`🚫 Permission denied - Required roles: ${requiredRoles.join(', ')}, User: ${userRole}`);
       return res.status(403).json({ success: false, message: 'Insufficient permissions for this action' });
+    }
+
+    // For staff roles, check dynamic permissions
+    if (requiredPermissions.length > 0 && ['generaltrainer', 'personaltrainer', 'housekeeping', 'receptionist'].includes(userRole)) {
+      try {
+        // Get user's staff role permissions
+        const { PrismaClient } = require('@prisma/client');
+        const prisma = new PrismaClient();
+
+        const staff = await prisma.staff.findFirst({
+          where: { userId: userId },
+          include: { role: true }
+        });
+
+        if (!staff || !staff.role) {
+          console.log(`🚫 No staff role found for user: ${userId}`);
+          return res.status(403).json({ success: false, message: 'Staff role not found' });
+        }
+
+        const userPermissions = staff.role.permissions || [];
+        const hasRequiredPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+
+        if (!hasRequiredPermission) {
+          console.log(`🚫 Permission denied - Required permissions: ${requiredPermissions.join(', ')}, User permissions: ${userPermissions.join(', ')}`);
+          return res.status(403).json({ success: false, message: 'Insufficient permissions for this action' });
+        }
+
+        console.log(`✅ Staff permission granted - Permissions: ${userPermissions.join(', ')}`);
+      } catch (error) {
+        console.error('Error checking staff permissions:', error);
+        return res.status(500).json({ success: false, message: 'Permission check error' });
+      }
     }
 
     // Additional checks for branch operations

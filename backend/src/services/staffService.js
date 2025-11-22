@@ -62,7 +62,7 @@ const createStaff = async (data, createdById) => {
       lastName: user.lastName,
       email: user.email,
       password: hashedPassword || '', // Required field, but will be updated if loginEnabled
-      role: 'member', // Default role, can be updated later if needed
+      roleId: user.roleId,// Default role, can be updated later if needed
       branchId: Number(branchId),
       loginEnabled: Boolean(loginEnabled),
       username: username || null,
@@ -145,6 +145,14 @@ const updateStaff = async (id, data) => {
   const staffUpdateData = { ...data };
   delete staffUpdateData.user; // Remove user data from staff update
   delete staffUpdateData.password; // Password is handled in user update
+
+  // Convert string values to appropriate types for Prisma
+  if (staffUpdateData.roleId !== undefined) staffUpdateData.roleId = Number(staffUpdateData.roleId);
+  if (staffUpdateData.branchId !== undefined) staffUpdateData.branchId = Number(staffUpdateData.branchId);
+  if (staffUpdateData.fixedSalary !== undefined) staffUpdateData.fixedSalary = staffUpdateData.fixedSalary ? Number(staffUpdateData.fixedSalary) : null;
+  if (staffUpdateData.hourlyRate !== undefined) staffUpdateData.hourlyRate = staffUpdateData.hourlyRate ? Number(staffUpdateData.hourlyRate) : null;
+  if (staffUpdateData.commissionRatePercent !== undefined) staffUpdateData.commissionRatePercent = Number(staffUpdateData.commissionRatePercent);
+  if (staffUpdateData.loginEnabled !== undefined) staffUpdateData.loginEnabled = staffUpdateData.loginEnabled === 'true' || staffUpdateData.loginEnabled === true;
 
   return await prisma.staff.update({
     where: { id },

@@ -1,69 +1,224 @@
 // src/components/SalaryCalculator.js
-import React, { useState } from 'react';
-import { FaPlus, FaTrashAlt, FaEdit, FaEye } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaPlus, FaTrashAlt, FaEdit, FaEye, FaSave, FaTimes, FaSearch, FaFilter, FaUser, FaIdCard } from 'react-icons/fa';
+import axiosInstance from '../../../utils/axiosInstance';
 
 const SalaryCalculator = () => {
+  // ===== STATE MANAGEMENT =====
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [modalType, setModalType] = useState('add'); // 'add', 'edit', 'view'
   const [selectedSalary, setSelectedSalary] = useState(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
-  // Sample data — in real app, fetch from API
-  const staffList = [
-    { id: 101, staff_id: "STAFF001", first_name: "Alex", last_name: "Martinez", role: "Manager", fixed_salary: 60000, hourly_rate: null, commission_rate_percent: 0 },
-    { id: 102, staff_id: "STAFF002", first_name: "Sarah", last_name: "Kim", role: "Trainer", fixed_salary: null, hourly_rate: 35, commission_rate_percent: 15 },
-    { id: 103, staff_id: "STAFF003", first_name: "Raj", last_name: "Patel", role: "Receptionist", fixed_salary: 35000, hourly_rate: null, commission_rate_percent: 0 }
-  ];
+  // Data states
+  const [staffList, setStaffList] = useState([]);
+  const [rolesList, setRolesList] = useState([]);
+  const [salaries, setSalaries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [salaries, setSalaries] = useState([
-    {
-      salary_id: "SAL001",
-      staff_id: "STAFF002",
-      period_start: "2025-04-01",
-      period_end: "2025-04-30",
-      hours_worked: 160,
-      hourly_total: 5600,
-      fixed_salary: null,
-      commission_total: 1200,
-      bonuses: [{ label: "Performance Bonus", amount: 500 }],
-      deductions: [{ label: "Late Penalty", amount: 100 }],
-      net_pay: 7200,
-      status: "Paid",
-      paid_at: "2025-05-02T10:30:00Z"
-    },
-    {
-      salary_id: "SAL002",
-      staff_id: "STAFF001",
-      period_start: "2025-04-01",
-      period_end: "2025-04-30",
-      hours_worked: null,
-      hourly_total: null,
-      fixed_salary: 5000,
-      commission_total: 0,
-      bonuses: [],
-      deductions: [{ label: "Tax", amount: 800 }],
-      net_pay: 4200,
-      status: "Approved",
-      paid_at: null
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [roleFilter, setRoleFilter] = useState('All Roles');
+
+  // Form models
+  const [salaryForm, setSalaryForm] = useState({
+    staffId: '',
+    roleId: '',
+    periodStart: '',
+    periodEnd: '',
+    hoursWorked: '',
+    fixedSalary: '',
+    bonuses: [],
+    deductions: [],
+    status: 'Generated'
+  });
+
+  // Form refs
+  const formRef = useRef({});
+
+  // ===== API INTEGRATION =====
+  const fetchStaffList = async () => {
+    try {
+      const response = await axiosInstance.get('/staff');
+      if (response.data.success) {
+        const transformedStaff = response.data.data.staff.map(staff => ({
+          id: staff.id,
+          staffId: staff.staffId,
+          firstName: staff.user.firstName,
+          lastName: staff.user.lastName,
+          fullName: `${staff.user.firstName} ${staff.user.lastName}`,
+          roleId: staff.roleId,
+          roleName: staff.role.name,
+          salaryType: staff.salaryType,
+          fixedSalary: staff.fixedSalary,
+          hourlyRate: staff.hourlyRate,
+          commissionRatePercent: staff.commissionRatePercent,
+          status: staff.status,
+          email: staff.user.email,
+          phone: staff.phone,
+          joinDate: staff.joinDate
+        }));
+        setStaffList(transformedStaff);
+      }
+    } catch (err) {
+      console.error('Error fetching staff:', err);
+      throw new Error('Failed to fetch staff list');
     }
-  ]);
+  };
 
-  // ===== HANDLERS =====
+  const fetchRolesList = async () => {
+    try {
+      const response = await axiosInstance.get('/staff-roles');
+      if (response.data.success) {
+        const transformedRoles = response.data.data.roles.map(role => ({
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          permissions: role.permissions,
+          status: role.status
+        }));
+        setRolesList(transformedRoles);
+      }
+    } catch (err) {
+      console.error('Error fetching roles:', err);
+      throw new Error('Failed to fetch roles list');
+    }
+  };
+
+  const fetchSalaries = async () => {
+    try {
+      const response = await axiosInstance.get('/salaries');
+      if (response.data.success) {
+        const transformedSalaries = response.data.data.salaries.map(salary => ({
+          id: salary.id,
+          salaryId: salary.salaryId,
+          staffId: salary.staffId,
+          staffName: `${salary.staff.user.firstName} ${salary.staff.user.lastName}`,
+          staffRole: salary.staff.role.name,
+          roleId: salary.staff.role.id,
+          periodStart: salary.periodStart,
+          periodEnd: salary.periodEnd,
+          hoursWorked: salary.hoursWorked,
+          hourlyTotal: salary.hourlyTotal,
+          fixedSalary: salary.fixedSalary,
+          commissionTotal: salary.commissionTotal,
+          bonuses: salary.bonuses || [],
+          deductions: salary.deductions || [],
+          netPay: salary.netPay,
+          status: salary.status,
+          approvedBy: salary.approvedBy,
+          paidAt: salary.paidAt,
+          createdAt: salary.createdAt,
+          updatedAt: salary.updatedAt
+        }));
+        setSalaries(transformedSalaries);
+      }
+    } catch (err) {
+      console.error('Error fetching salaries:', err);
+      throw new Error('Failed to fetch salary records');
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      await Promise.all([fetchStaffList(), fetchRolesList(), fetchSalaries()]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // ===== FORM MODEL HANDLERS =====
+  const handleFormChange = (field, value) => {
+    setSalaryForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Auto-calculate when dependent fields change
+    if (['staffId', 'hoursWorked', 'fixedSalary'].includes(field)) {
+      handleCalculationChange();
+    }
+  };
+
+  const resetForm = () => {
+    setSalaryForm({
+      staffId: '',
+      roleId: '',
+      periodStart: '',
+      periodEnd: '',
+      hoursWorked: '',
+      fixedSalary: '',
+      bonuses: [],
+      deductions: [],
+      status: 'Generated'
+    });
+  };
+
+  // ===== FILTERED DATA =====
+  const filteredSalaries = salaries.filter(salary => {
+    const matchesSearch = 
+      salary.salaryId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      salary.staffName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      salary.staffRole.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'All Status' || salary.status === statusFilter;
+    const matchesRole = roleFilter === 'All Roles' || salary.staffRole === roleFilter;
+    
+    return matchesSearch && matchesStatus && matchesRole;
+  });
+
+  // ===== MODAL HANDLERS =====
   const handleAddNew = () => {
     setModalType('add');
     setSelectedSalary(null);
+    resetForm();
     setIsModalOpen(true);
   };
 
   const handleView = (salary) => {
     setModalType('view');
     setSelectedSalary(salary);
+    // Populate form with selected salary data
+    setSalaryForm({
+      staffId: salary.staffId,
+      roleId: salary.roleId,
+      periodStart: salary.periodStart ? new Date(salary.periodStart).toISOString().split('T')[0] : '',
+      periodEnd: salary.periodEnd ? new Date(salary.periodEnd).toISOString().split('T')[0] : '',
+      hoursWorked: salary.hoursWorked || '',
+      fixedSalary: salary.fixedSalary || '',
+      bonuses: salary.bonuses || [],
+      deductions: salary.deductions || [],
+      status: salary.status
+    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (salary) => {
     setModalType('edit');
     setSelectedSalary(salary);
+    // Populate form with selected salary data
+    setSalaryForm({
+      staffId: salary.staffId,
+      roleId: salary.roleId,
+      periodStart: salary.periodStart ? new Date(salary.periodStart).toISOString().split('T')[0] : '',
+      periodEnd: salary.periodEnd ? new Date(salary.periodEnd).toISOString().split('T')[0] : '',
+      hoursWorked: salary.hoursWorked || '',
+      fixedSalary: salary.fixedSalary || '',
+      bonuses: salary.bonuses || [],
+      deductions: salary.deductions || [],
+      status: salary.status
+    });
     setIsModalOpen(true);
   };
 
@@ -72,18 +227,35 @@ const SalaryCalculator = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (selectedSalary) {
-      setSalaries(prev => prev.filter(s => s.salary_id !== selectedSalary.salary_id));
-      alert(`Salary record ${selectedSalary.salary_id} deleted.`);
+  const confirmDelete = async () => {
+    if (!selectedSalary) return;
+
+    try {
+      setSubmitLoading(true);
+      const response = await axiosInstance.delete(`/salaries/${selectedSalary.id}`);
+      
+      if (response.data.success) {
+        setSalaries(prev => prev.filter(s => s.id !== selectedSalary.id));
+        alert(`Salary record ${selectedSalary.salaryId} has been deleted successfully.`);
+      } else {
+        alert('Failed to delete salary record: ' + (response.data.message || 'Unknown error'));
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to delete salary record';
+      alert(errorMessage);
+      console.error('Error deleting salary:', err);
+    } finally {
+      setSubmitLoading(false);
+      setIsDeleteModalOpen(false);
+      setSelectedSalary(null);
     }
-    setIsDeleteModalOpen(false);
-    setSelectedSalary(null);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedSalary(null);
+    resetForm();
+    formRef.current = {};
   };
 
   const closeDeleteModal = () => {
@@ -91,8 +263,197 @@ const SalaryCalculator = () => {
     setSelectedSalary(null);
   };
 
+  // ===== CALCULATION HELPERS =====
+  const getSelectedStaff = () => {
+    return staffList.find(staff => staff.staffId === salaryForm.staffId);
+  };
+
+  const calculateHourlyTotal = () => {
+    const staff = getSelectedStaff();
+    if (!salaryForm.hoursWorked || !staff?.hourlyRate) return 0;
+    return parseFloat(salaryForm.hoursWorked) * staff.hourlyRate;
+  };
+
+  const calculateCommissionTotal = () => {
+    const staff = getSelectedStaff();
+    if (!staff?.commissionRatePercent || staff.commissionRatePercent === 0) return 0;
+    const baseAmount = (calculateHourlyTotal() || 0) + (parseFloat(salaryForm.fixedSalary) || 0);
+    return (baseAmount * staff.commissionRatePercent) / 100;
+  };
+
+  const calculateNetPay = () => {
+    const hourlyTotal = calculateHourlyTotal();
+    const fixedSalary = parseFloat(salaryForm.fixedSalary) || 0;
+    const commissionTotal = calculateCommissionTotal();
+    const bonusSum = salaryForm.bonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
+    const deductionSum = salaryForm.deductions.reduce((sum, d) => sum + (d.amount || 0), 0);
+    return hourlyTotal + fixedSalary + commissionTotal + bonusSum - deductionSum;
+  };
+
+  const handleCalculationChange = () => {
+    // This function is called when dependent fields change
+    // Calculations are done in the getter functions above
+  };
+
+  // ===== BONUS/DEDUCTION MANAGEMENT =====
+  const handleAddBonus = () => {
+    const label = formRef.current.bonusLabel?.value?.trim();
+    const amount = parseFloat(formRef.current.bonusAmount?.value);
+
+    if (!label || isNaN(amount) || amount <= 0) {
+      alert('Please enter valid bonus label and amount');
+      return;
+    }
+
+    const newBonus = { label, amount };
+    setSalaryForm(prev => ({
+      ...prev,
+      bonuses: [...prev.bonuses, newBonus]
+    }));
+
+    // Clear input fields
+    if (formRef.current.bonusLabel) formRef.current.bonusLabel.value = '';
+    if (formRef.current.bonusAmount) formRef.current.bonusAmount.value = '';
+  };
+
+  const handleRemoveBonus = (index) => {
+    setSalaryForm(prev => ({
+      ...prev,
+      bonuses: prev.bonuses.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddDeduction = () => {
+    const label = formRef.current.deductionLabel?.value?.trim();
+    const amount = parseFloat(formRef.current.deductionAmount?.value);
+
+    if (!label || isNaN(amount) || amount <= 0) {
+      alert('Please enter valid deduction label and amount');
+      return;
+    }
+
+    const newDeduction = { label, amount };
+    setSalaryForm(prev => ({
+      ...prev,
+      deductions: [...prev.deductions, newDeduction]
+    }));
+
+    // Clear input fields
+    if (formRef.current.deductionLabel) formRef.current.deductionLabel.value = '';
+    if (formRef.current.deductionAmount) formRef.current.deductionAmount.value = '';
+  };
+
+  const handleRemoveDeduction = (index) => {
+    setSalaryForm(prev => ({
+      ...prev,
+      deductions: prev.deductions.filter((_, i) => i !== index)
+    }));
+  };
+
+  // ===== FORM SUBMISSION =====
+  const handleSaveSalary = async () => {
+    // Basic validation
+    if (!salaryForm.staffId || !salaryForm.periodStart || !salaryForm.periodEnd) {
+      alert('Please fill in all required fields: Staff Member, Period Start, and Period End');
+      return;
+    }
+
+    try {
+      setSubmitLoading(true);
+
+      const selectedStaff = getSelectedStaff();
+      const hourlyTotal = calculateHourlyTotal();
+      const commissionTotal = calculateCommissionTotal();
+      const netPay = calculateNetPay();
+
+      const payload = {
+        staffId: selectedStaff.id, // Send staff database ID
+        periodStart: new Date(salaryForm.periodStart).toISOString(),
+        periodEnd: new Date(salaryForm.periodEnd).toISOString(),
+        hoursWorked: parseFloat(salaryForm.hoursWorked) || null,
+        hourlyTotal: hourlyTotal || null,
+        fixedSalary: parseFloat(salaryForm.fixedSalary) || null,
+        commissionTotal: commissionTotal || null,
+        bonuses: salaryForm.bonuses,
+        deductions: salaryForm.deductions,
+        netPay: netPay,
+        status: salaryForm.status
+      };
+
+      let response;
+
+      if (selectedSalary) {
+        // Update existing salary
+        response = await axiosInstance.put(`/salaries/${selectedSalary.id}`, payload);
+        if (response.data.success) {
+          const updatedSalary = {
+            ...selectedSalary,
+            ...payload,
+            staffName: selectedStaff.fullName,
+            staffRole: selectedStaff.roleName
+          };
+          setSalaries(prev => prev.map(s => s.id === selectedSalary.id ? updatedSalary : s));
+          alert('Salary record updated successfully!');
+        }
+      } else {
+        // Create new salary
+        response = await axiosInstance.post('/salaries', payload);
+        if (response.data.success) {
+          const newSalary = {
+            id: response.data.data.salary?.id || Date.now(),
+            salaryId: response.data.data.salary?.salaryId || `SAL${Date.now()}`,
+            staffId: salaryForm.staffId,
+            staffName: selectedStaff.fullName,
+            staffRole: selectedStaff.roleName,
+            roleId: selectedStaff.roleId,
+            ...payload
+          };
+          setSalaries(prev => [...prev, newSalary]);
+          alert('Salary record created successfully!');
+        }
+      }
+
+      closeModal();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to save salary record';
+      alert(errorMessage);
+      console.error('Error saving salary:', err);
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  // ===== STAFF FILTERING BY ROLE =====
+  const getStaffByRole = (roleId) => {
+    if (!roleId) return staffList.filter(staff => staff.status === 'Active');
+    return staffList.filter(staff => staff.roleId === parseInt(roleId) && staff.status === 'Active');
+  };
+
+  // When role changes in form, filter staff list
+  const handleRoleChange = (roleId) => {
+    handleFormChange('roleId', roleId);
+    // Reset staff selection if the selected staff doesn't belong to the new role
+    if (salaryForm.staffId) {
+      const staff = staffList.find(s => s.staffId === salaryForm.staffId);
+      if (staff && staff.roleId !== parseInt(roleId)) {
+        handleFormChange('staffId', '');
+      }
+    }
+  };
+
+  // When staff is selected, auto-fill their role
+  const handleStaffChange = (staffId) => {
+    handleFormChange('staffId', staffId);
+    if (staffId) {
+      const staff = staffList.find(s => s.staffId === staffId);
+      if (staff) {
+        handleFormChange('roleId', staff.roleId.toString());
+      }
+    }
+  };
+
   // Prevent background scroll
-  React.useEffect(() => {
+  useEffect(() => {
     if (isModalOpen || isDeleteModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -117,11 +478,6 @@ const SalaryCalculator = () => {
     );
   };
 
-  const getStaffInfo = (staffId) => {
-    const staff = staffList.find(s => s.staff_id === staffId);
-    return staff || { first_name: 'Unknown', last_name: '', role: 'Unknown' };
-  };
-
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -141,44 +497,61 @@ const SalaryCalculator = () => {
   const getNextSalaryId = () => {
     const prefix = "SAL";
     const maxId = salaries.length > 0
-      ? Math.max(...salaries.map(s => parseInt(s.salary_id.replace(prefix, '')) || 0))
+      ? Math.max(...salaries.map(s => {
+          const match = s.salaryId?.match(/\d+/);
+          return match ? parseInt(match[0]) : 0;
+        }))
       : 0;
     return `${prefix}${String(maxId + 1).padStart(3, '0')}`;
   };
 
-  // Auto-calculate hourly total based on hours and staff's hourly rate
-  const calculateHourlyTotal = (hoursWorked, staffId) => {
-    const staff = staffList.find(s => s.staff_id === staffId);
-    if (!hoursWorked || !staff?.hourly_rate) return 0;
-    return hoursWorked * staff.hourly_rate;
+  const getSelectedStaffDetails = () => {
+    return getSelectedStaff();
   };
 
-  // Auto-calculate commission total based on fixed/hourly earnings and commission rate
-  const calculateCommissionTotal = (hourlyTotal, fixedSalary, staffId) => {
-    const staff = staffList.find(s => s.staff_id === staffId);
-    if (!staff?.commission_rate_percent || staff.commission_rate_percent === 0) return 0;
+  // ===== JSX RENDER =====
+  if (loading) {
+    return (
+      <div className="container-fluid p-3 p-md-4">
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="text-muted mt-2">Loading salary data...</p>
+        </div>
+      </div>
+    );
+  }
 
-    const baseAmount = (hourlyTotal || 0) + (fixedSalary || 0);
-    return (baseAmount * staff.commission_rate_percent) / 100;
-  };
+  if (error) {
+    return (
+      <div className="container-fluid p-3 p-md-4">
+        <div className="alert alert-danger d-flex flex-column flex-md-row align-items-center justify-content-between" role="alert">
+          <div className="mb-2 mb-md-0">
+            <strong>Error:</strong> {error}
+          </div>
+          <button 
+            className="btn btn-sm btn-outline-danger"
+            onClick={fetchData}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  // Auto-calculate net pay
-  const calculateNetPay = (hourlyTotal, fixedSalary, commissionTotal, bonuses, deductions) => {
-    const bonusSum = (bonuses || []).reduce((sum, b) => sum + b.amount, 0);
-    const deductionSum = (deductions || []).reduce((sum, d) => sum + d.amount, 0);
-    return (hourlyTotal || 0) + (fixedSalary || 0) + commissionTotal + bonusSum - deductionSum;
-  };
-
-  // ===== JSX =====
   return (
-    <div className="container-fluid p-4">
+    <div className="container-fluid p-3 p-md-4">
       {/* Header */}
       <div className="row mb-4 align-items-center">
-        <div className="col-12 col-lg-8">
-          <h2 className="fw-bold">Salary Calculator</h2>
-          <p className="text-muted mb-0">Calculate and manage staff salaries based on role (Fixed, Hourly, Commission).</p>
+        <div className="col-12 col-lg-8 mb-3 mb-lg-0">
+          <h2 className="fw-bold h4 h2-md">Salary Calculator</h2>
+          <p className="text-muted mb-0 small small-md">
+            Calculate and manage staff salaries based on role (Fixed, Hourly, Commission).
+          </p>
         </div>
-        <div className="col-12 col-lg-4 text-lg-end mt-3 mt-lg-0">
+        <div className="col-12 col-lg-4 text-lg-end">
           <button
             className="btn w-100 w-md-auto"
             style={{
@@ -187,9 +560,8 @@ const SalaryCalculator = () => {
               border: 'none',
               borderRadius: '8px',
               padding: '10px 20px',
-              fontSize: '1rem',
+              fontSize: '0.9rem',
               fontWeight: '500',
-              transition: 'all 0.2s ease',
             }}
             onClick={handleAddNew}
           >
@@ -199,304 +571,396 @@ const SalaryCalculator = () => {
       </div>
 
       {/* Search & Filter */}
-      <div className="row mb-4 g-3">
-        <div className="col-12 col-md-6 col-lg-5">
-          <div className="input-group">
-            <span className="input-group-text bg-light border">
-              <i className="fas fa-search text-muted"></i>
+      <div className="row mb-4 g-2 g-md-3">
+        <div className="col-12 col-md-6 col-lg-4">
+          <div className="input-group input-group-sm input-group-md">
+            <span className="input-group-text bg-light border-end-0">
+              <FaSearch className="text-muted" size={14} />
             </span>
             <input
               type="text"
-              className="form-control border"
-              placeholder="Search by staff name or ID..."
+              className="form-control border-start-0"
+              placeholder="Search staff, role, or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
         <div className="col-6 col-md-3 col-lg-2">
-          <select className="form-select">
-            <option>All Status</option>
-            <option>Generated</option>
-            <option>Approved</option>
-            <option>Paid</option>
-          </select>
+          <div className="input-group input-group-sm input-group-md">
+            <span className="input-group-text bg-light border-end-0 d-none d-md-block">
+              <FaFilter className="text-muted" size={12} />
+            </span>
+            <select 
+              className="form-control"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option>All Status</option>
+              <option>Generated</option>
+              <option>Approved</option>
+              <option>Paid</option>
+            </select>
+          </div>
         </div>
         <div className="col-6 col-md-3 col-lg-2">
-          <select className="form-select">
+          <select 
+            className="form-control form-control-sm form-control-md"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
             <option>All Roles</option>
-            <option>Manager</option>
-            <option>Trainer</option>
-            <option>Receptionist</option>
+            {rolesList
+              .filter(role => role.status === 'Active')
+              .map(role => (
+              <option key={role.id} value={role.name}>{role.name}</option>
+            ))}
           </select>
+        </div>
+        <div className="col-12 col-md-6 col-lg-4 d-flex justify-content-end">
+          <div className="text-muted small">
+            Showing {filteredSalaries.length} of {salaries.length} records
+          </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Salary Records Table */}
       <div className="card shadow-sm border-0">
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0">
             <thead className="bg-light">
               <tr>
-                <th className="fw-semibold">SALARY ID</th>
-                <th className="fw-semibold">STAFF</th>
-                <th className="fw-semibold">ROLE</th>
-                <th className="fw-semibold">PERIOD</th>
-                <th className="fw-semibold text-end">NET PAY</th>
-                <th className="fw-semibold">STATUS</th>
-                <th className="fw-semibold text-center">ACTIONS</th>
+                <th className="fw-semibold small">SALARY ID</th>
+                <th className="fw-semibold small">STAFF</th>
+                <th className="fw-semibold small d-none d-md-table-cell">ROLE</th>
+                <th className="fw-semibold small">PERIOD</th>
+                <th className="fw-semibold small text-end">NET PAY</th>
+                <th className="fw-semibold small d-none d-sm-table-cell">STATUS</th>
+                <th className="fw-semibold small text-center">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {salaries.map((salary) => {
-                const staff = getStaffInfo(salary.staff_id);
-                return (
-                  <tr key={salary.salary_id}>
-                    <td><strong>{salary.salary_id}</strong></td>
-                    <td>{staff.first_name} {staff.last_name}</td>
-                    <td><span className="badge bg-primary">{staff.role}</span></td>
+              {filteredSalaries.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-5 text-muted">
+                    <div className="mb-2">
+                      <FaSearch size={32} className="text-muted" />
+                    </div>
+                    No salary records found
+                    {searchTerm || statusFilter !== 'All Status' || roleFilter !== 'All Roles' ? 
+                      ' matching your filters' : ''
+                    }
+                  </td>
+                </tr>
+              ) : (
+                filteredSalaries.map((salary) => (
+                  <tr key={salary.salaryId}>
                     <td>
-                      {formatDate(salary.period_start)}<br/>
-                      <small className="text-muted">to {formatDate(salary.period_end)}</small>
+                      <strong className="small">{salary.salaryId}</strong>
                     </td>
-                    <td className="text-end fw-bold">₹{(salary.net_pay)}</td>
-                    <td>{getStatusBadge(salary.status)}</td>
+                    <td>
+                      <div>
+                        <div className="fw-medium small">{salary.staffName}</div>
+                        <small className="text-muted d-block d-md-none">{salary.staffRole}</small>
+                      </div>
+                    </td>
+                    <td className="d-none d-md-table-cell">
+                      <span className="badge bg-primary small">{salary.staffRole}</span>
+                    </td>
+                    <td>
+                      <div className="small">
+                        {formatDate(salary.periodStart)}
+                        <br className="d-none d-sm-block" />
+                        <small className="text-muted d-block d-sm-none">to {formatDate(salary.periodEnd)}</small>
+                      </div>
+                      <small className="text-muted d-none d-sm-block">to {formatDate(salary.periodEnd)}</small>
+                    </td>
+                    <td className="text-end fw-bold small">{formatCurrency(salary.netPay)}</td>
+                    <td className="d-none d-sm-table-cell">{getStatusBadge(salary.status)}</td>
                     <td className="text-center">
-                      <div className="btn-group" role="group">
+                      <div className="btn-group btn-group-sm" role="group">
                         <button
-                          className="btn btn-sm btn-outline-secondary"
+                          className="btn btn-outline-secondary btn-sm"
                           title="View"
                           onClick={() => handleView(salary)}
                         >
-                          <FaEye size={14} />
+                          <FaEye size={12} />
                         </button>
                         <button
-                          className="btn btn-sm btn-outline-primary"
+                          className="btn btn-outline-primary btn-sm"
                           title="Edit"
                           onClick={() => handleEdit(salary)}
                           disabled={salary.status === "Paid"}
                         >
-                          <FaEdit size={14} />
+                          <FaEdit size={12} />
                         </button>
                         <button
-                          className="btn btn-sm btn-outline-danger"
+                          className="btn btn-outline-danger btn-sm"
                           title="Delete"
                           onClick={() => handleDeleteClick(salary)}
                           disabled={salary.status === "Paid"}
                         >
-                          <FaTrashAlt size={14} />
+                          <FaTrashAlt size={12} />
                         </button>
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* MODAL */}
+      {/* SALARY FORM MODAL */}
       {isModalOpen && (
         <div
-          className="modal fade show"
+          className="modal fade show d-block"
           tabIndex="-1"
-          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={closeModal}
         >
           <div
-            className="modal-dialog modal-lg modal-dialog-centered"
+            className="modal-dialog modal-lg modal-dialog-centered "
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content">
               <div className="modal-header border-0 pb-0">
-                <h5 className="modal-title fw-bold">
+                <h5 className="modal-title fw-bold h6 h5-md">
                   {modalType === 'add' ? 'Add New Salary Record' :
                    modalType === 'edit' ? 'Edit Salary Record' : 'View Salary Record'}
                 </h5>
-                <button type="button" className="btn-close" onClick={closeModal}></button>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={closeModal}
+                  disabled={submitLoading}
+                ></button>
               </div>
-              <div className="modal-body p-4">
-                <form>
-                  {/* SECTION 1: Staff & Period */}
-                  <h6 className="fw-bold mb-3">Staff & Period</h6>
-                  <div className="row g-3 mb-3">
+              <div className="modal-body p-3 p-md-4">
+                <form onSubmit={(e) => e.preventDefault()}>
+                  {/* SECTION 1: Basic Information */}
+                  <h6 className="fw-bold mb-3 small small-md">
+                    <FaIdCard className="me-2" />
+                    Basic Information
+                  </h6>
+                  <div className="row g-2 g-md-3 mb-3">
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Salary ID</label>
+                      <label className="form-label small">Salary ID</label>
                       <input
                         type="text"
-                        className="form-control"
-                        value={selectedSalary?.salary_id || (modalType === 'add' ? getNextSalaryId() : '')}
+                        className="form-control form-control-sm form-control-md"
+                        value={selectedSalary?.salaryId || (modalType === 'add' ? getNextSalaryId() : '')}
                         readOnly
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Staff Member <span className="text-danger">*</span></label>
+                      <label className="form-label small">
+                        Role <span className="text-danger">*</span>
+                      </label>
                       <select
-                        className="form-select"
-                        disabled={modalType === 'view'}
-                        defaultValue={selectedSalary?.staff_id || ''}
-                        onChange={(e) => {
-                          if (modalType === 'add' || modalType === 'edit') {
-                            const staffId = e.target.value;
-                            const staff = staffList.find(s => s.staff_id === staffId);
-                            if (staff) {
-                              // Auto-set roles-related fields
-                              // We'll update form values dynamically via state later
-                            }
-                          }
-                        }}
+                        className="form-select form-select-sm form-select-md"
+                        disabled={modalType === 'view' || submitLoading}
+                        value={salaryForm.roleId}
+                        onChange={(e) => handleRoleChange(e.target.value)}
                         required
                       >
-                        <option value="">Select Staff</option>
-                        {staffList.map(staff => (
-                          <option key={staff.staff_id} value={staff.staff_id}>
-                            {staff.first_name} {staff.last_name} ({staff.role})
+                        <option value="">Select Role</option>
+                        {rolesList
+                          .filter(role => role.status === 'Active')
+                          .map(role => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
                           </option>
                         ))}
                       </select>
                     </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Role</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={selectedSalary 
-                          ? getStaffInfo(selectedSalary.staff_id)?.role 
-                          : ''}
-                        readOnly
-                      />
+                    <div className="col-12">
+                      <label className="form-label small">
+                        Staff Member <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className="form-select form-select-sm form-select-md"
+                        disabled={modalType === 'view' || submitLoading}
+                        value={salaryForm.staffId}
+                        onChange={(e) => handleStaffChange(e.target.value)}
+                        required
+                      >
+                        <option value="">Select Staff</option>
+                        {getStaffByRole(salaryForm.roleId).map(staff => (
+                          <option key={staff.staffId} value={staff.staffId}>
+                            {staff.fullName} - {staff.roleName} ({staff.salaryType})
+                          </option>
+                        ))}
+                      </select>
                     </div>
+                    
+                    {/* Staff Details Card */}
+                    {salaryForm.staffId && (
+                      <div className="col-12">
+                        <div className="card bg-light border-0">
+                          <div className="card-body p-3">
+                            <div className="row g-2">
+                              <div className="col-12 col-md-6">
+                                <small className="text-muted d-block">Salary Type</small>
+                                <strong>{getSelectedStaffDetails()?.salaryType || '—'}</strong>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <small className="text-muted d-block">Hourly Rate</small>
+                                <strong>{getSelectedStaffDetails()?.hourlyRate ? formatCurrency(getSelectedStaffDetails().hourlyRate) : '—'}</strong>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <small className="text-muted d-block">Fixed Salary</small>
+                                <strong>{getSelectedStaffDetails()?.fixedSalary ? formatCurrency(getSelectedStaffDetails().fixedSalary) : '—'}</strong>
+                              </div>
+                              <div className="col-12 col-md-6">
+                                <small className="text-muted d-block">Commission Rate</small>
+                                <strong>{getSelectedStaffDetails()?.commissionRatePercent ? `${getSelectedStaffDetails().commissionRatePercent}%` : '—'}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Period Start <span className="text-danger">*</span></label>
+                      <label className="form-label small">
+                        Period Start <span className="text-danger">*</span>
+                      </label>
                       <input
                         type="date"
-                        className="form-control"
-                        defaultValue={selectedSalary?.period_start || ''}
-                        disabled={modalType === 'view'}
+                        className="form-control form-control-sm form-control-md"
+                        value={salaryForm.periodStart}
+                        disabled={modalType === 'view' || submitLoading}
+                        onChange={(e) => handleFormChange('periodStart', e.target.value)}
                         required
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Period End <span className="text-danger">*</span></label>
+                      <label className="form-label small">
+                        Period End <span className="text-danger">*</span>
+                      </label>
                       <input
                         type="date"
-                        className="form-control"
-                        defaultValue={selectedSalary?.period_end || ''}
-                        disabled={modalType === 'view'}
+                        className="form-control form-control-sm form-control-md"
+                        value={salaryForm.periodEnd}
+                        disabled={modalType === 'view' || submitLoading}
+                        onChange={(e) => handleFormChange('periodEnd', e.target.value)}
                         required
                       />
                     </div>
                   </div>
 
                   {/* SECTION 2: Compensation Details */}
-                  <h6 className="fw-bold mb-3">Compensation Details</h6>
-                  <div className="row g-3 mb-3">
+                  <h6 className="fw-bold mb-3 small small-md">
+                    <FaUser className="me-2" />
+                    Compensation Details
+                  </h6>
+                  <div className="row g-2 g-md-3 mb-3">
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Hours Worked</label>
+                      <label className="form-label small">Hours Worked</label>
                       <input
                         type="number"
-                        className="form-control"
+                        className="form-control form-control-sm form-control-md"
                         placeholder="e.g., 160"
-                        defaultValue={selectedSalary?.hours_worked || ''}
-                        disabled={modalType === 'view'}
+                        value={salaryForm.hoursWorked}
+                        disabled={modalType === 'view' || submitLoading}
                         step="0.1"
                         min="0"
-                        onChange={(e) => {
-                          if (modalType !== 'view' && selectedSalary) {
-                            const hours = parseFloat(e.target.value) || 0;
-                            const staff = staffList.find(s => s.staff_id === selectedSalary.staff_id);
-                            const hourlyTotal = hours * (staff?.hourly_rate || 0);
-                            const commissionTotal = calculateCommissionTotal(hourlyTotal, selectedSalary.fixed_salary, selectedSalary.staff_id);
-                            const netPay = calculateNetPay(hourlyTotal, selectedSalary.fixed_salary, commissionTotal, selectedSalary.bonuses, selectedSalary.deductions);
-                            // In real app: update state with calculated values
-                            // For demo, we just show auto-calculation
-                          }
-                        }}
+                        onChange={(e) => handleFormChange('hoursWorked', e.target.value)}
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Hourly Rate (from profile)</label>
+                      <label className="form-label small">Hourly Total</label>
                       <input
                         type="number"
-                        className="form-control"
-                        placeholder="Auto-filled from staff profile"
-                        readOnly
-                        defaultValue={selectedSalary 
-                          ? getStaffInfo(selectedSalary.staff_id)?.hourly_rate || 0 
-                          : 0}
-                      />
-                    </div>
-                    <div className="col-12 col-md-6">
-                      <label className="form-label">Hourly Total</label>
-                      <input
-                        type="number"
-                        className="form-control"
+                        className="form-control form-control-sm form-control-md"
                         placeholder="Auto-calculated"
                         readOnly
-                        defaultValue={selectedSalary?.hourly_total || 0}
+                        value={calculateHourlyTotal()}
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Fixed Salary</label>
+                      <label className="form-label small">Fixed Salary</label>
                       <input
                         type="number"
-                        className="form-control"
+                        className="form-control form-control-sm form-control-md"
                         placeholder="e.g., 5000"
-                        defaultValue={selectedSalary?.fixed_salary || ''}
-                        disabled={modalType === 'view'}
+                        value={salaryForm.fixedSalary}
+                        disabled={modalType === 'view' || submitLoading}
                         min="0"
+                        step="0.01"
+                        onChange={(e) => handleFormChange('fixedSalary', e.target.value)}
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Commission Total</label>
+                      <label className="form-label small">Commission Total</label>
                       <input
                         type="number"
-                        className="form-control"
-                        placeholder="e.g., 1200"
-                        defaultValue={selectedSalary?.commission_total || ''}
-                        disabled={modalType === 'view'}
-                        min="0"
+                        className="form-control form-control-sm form-control-md"
+                        placeholder="Auto-calculated"
+                        readOnly
+                        value={calculateCommissionTotal()}
                       />
                     </div>
                   </div>
 
-                  {/* SECTION 3: Bonuses & Deductions */}
-                  <h6 className="fw-bold mb-3">Bonuses</h6>
+                  {/* SECTION 3: Bonuses */}
+                  <h6 className="fw-bold mb-3 small small-md">Bonuses</h6>
                   <div className="mb-3">
-                    <div className="row g-2 mb-2">
-                      <div className="col-12 col-md-5">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Bonus label (e.g., Performance Bonus)"
-                          disabled={modalType === 'view'}
-                        />
+                    {modalType !== 'view' && (
+                      <div className="row g-2 mb-2">
+                        <div className="col-12 col-md-5">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm form-control-md"
+                            placeholder="Bonus label (e.g., Performance Bonus)"
+                            disabled={submitLoading}
+                            ref={input => formRef.current.bonusLabel = input}
+                          />
+                        </div>
+                        <div className="col-12 col-md-5">
+                          <input
+                            type="number"
+                            className="form-control form-control-sm form-control-md"
+                            placeholder="Amount"
+                            disabled={submitLoading}
+                            min="0"
+                            step="0.01"
+                            ref={input => formRef.current.bonusAmount = input}
+                          />
+                        </div>
+                        <div className="col-12 col-md-2 d-flex align-items-center">
+                          <button
+                            type="button"
+                            className="btn btn-outline-success btn-sm w-100"
+                            onClick={handleAddBonus}
+                            disabled={submitLoading}
+                          >
+                            <FaPlus size={12} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="col-12 col-md-5">
-                        <input
-                          type="number"
-                          className="form-control"
-                          placeholder="Amount"
-                          disabled={modalType === 'view'}
-                          min="0"
-                        />
-                      </div>
-                      <div className="col-12 col-md-2 d-flex align-items-center">
-                        <button
-                          type="button"
-                          className="btn btn-outline-success w-100"
-                          disabled={modalType === 'view'}
-                        >
-                          <FaPlus size={14} />
-                        </button>
-                      </div>
-                    </div>
+                    )}
                     <div className="border rounded p-2 bg-light small">
-                      {selectedSalary?.bonuses?.length > 0 ? (
+                      {salaryForm.bonuses.length > 0 ? (
                         <ul className="mb-0">
-                          {selectedSalary.bonuses.map((bonus, i) => (
-                            <li key={i} className="d-flex justify-content-between">
+                          {salaryForm.bonuses.map((bonus, i) => (
+                            <li key={i} className="d-flex justify-content-between align-items-center">
                               <span>{bonus.label}</span>
-                              <span>{formatCurrency(bonus.amount)}</span>
+                              <div>
+                                <span className="me-2">{formatCurrency(bonus.amount)}</span>
+                                {modalType !== 'view' && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger"
+                                    onClick={() => handleRemoveBonus(i)}
+                                    disabled={submitLoading}
+                                  >
+                                    <FaTimes size={10} />
+                                  </button>
+                                )}
+                              </div>
                             </li>
                           ))}
                         </ul>
@@ -506,43 +970,62 @@ const SalaryCalculator = () => {
                     </div>
                   </div>
 
-                  <h6 className="fw-bold mb-3">Deductions</h6>
+                  {/* SECTION 4: Deductions */}
+                  <h6 className="fw-bold mb-3 small small-md">Deductions</h6>
                   <div className="mb-3">
-                    <div className="row g-2 mb-2">
-                      <div className="col-12 col-md-5">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Deduction label (e.g., Tax)"
-                          disabled={modalType === 'view'}
-                        />
+                    {modalType !== 'view' && (
+                      <div className="row g-2 mb-2">
+                        <div className="col-12 col-md-5">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm form-control-md"
+                            placeholder="Deduction label (e.g., Tax)"
+                            disabled={submitLoading}
+                            ref={input => formRef.current.deductionLabel = input}
+                          />
+                        </div>
+                        <div className="col-12 col-md-5">
+                          <input
+                            type="number"
+                            className="form-control form-control-sm form-control-md"
+                            placeholder="Amount"
+                            disabled={submitLoading}
+                            min="0"
+                            step="0.01"
+                            ref={input => formRef.current.deductionAmount = input}
+                          />
+                        </div>
+                        <div className="col-12 col-md-2 d-flex align-items-center">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger btn-sm w-100"
+                            onClick={handleAddDeduction}
+                            disabled={submitLoading}
+                          >
+                            <FaPlus size={12} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="col-12 col-md-5">
-                        <input
-                          type="number"
-                          className="form-control"
-                          placeholder="Amount"
-                          disabled={modalType === 'view'}
-                          min="0"
-                        />
-                      </div>
-                      <div className="col-12 col-md-2 d-flex align-items-center">
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger w-100"
-                          disabled={modalType === 'view'}
-                        >
-                          <FaPlus size={14} />
-                        </button>
-                      </div>
-                    </div>
+                    )}
                     <div className="border rounded p-2 bg-light small">
-                      {selectedSalary?.deductions?.length > 0 ? (
+                      {salaryForm.deductions.length > 0 ? (
                         <ul className="mb-0">
-                          {selectedSalary.deductions.map((deduction, i) => (
-                            <li key={i} className="d-flex justify-content-between">
+                          {salaryForm.deductions.map((deduction, i) => (
+                            <li key={i} className="d-flex justify-content-between align-items-center">
                               <span>{deduction.label}</span>
-                              <span>{formatCurrency(deduction.amount)}</span>
+                              <div>
+                                <span className="me-2">{formatCurrency(deduction.amount)}</span>
+                                {modalType !== 'view' && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger"
+                                    onClick={() => handleRemoveDeduction(i)}
+                                    disabled={submitLoading}
+                                  >
+                                    <FaTimes size={10} />
+                                  </button>
+                                )}
+                              </div>
                             </li>
                           ))}
                         </ul>
@@ -552,70 +1035,71 @@ const SalaryCalculator = () => {
                     </div>
                   </div>
 
-                  {/* SECTION 4: Summary & Status */}
-                  <h6 className="fw-bold mb-3">Summary</h6>
-                  <div className="row g-3 mb-3">
+                  {/* SECTION 5: Summary */}
+                  <h6 className="fw-bold mb-3 small small-md">Summary</h6>
+                  <div className="row g-2 g-md-3 mb-3">
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Net Pay (auto-calculated)</label>
+                      <label className="form-label small">Net Pay (auto-calculated)</label>
                       <input
                         type="number"
-                        className="form-control fw-bold"
-                        value={selectedSalary?.net_pay || 0}
+                        className="form-control form-control-sm form-control-md fw-bold"
                         readOnly
+                        value={calculateNetPay()}
                       />
                     </div>
                     <div className="col-12 col-md-6">
-                      <label className="form-label">Status</label>
+                      <label className="form-label small">Status</label>
                       <select
-                        className="form-select"
-                        disabled={modalType === 'view'}
-                        defaultValue={selectedSalary?.status || 'Generated'}
+                        className="form-select form-select-sm form-select-md"
+                        disabled={modalType === 'view' || submitLoading}
+                        value={salaryForm.status}
+                        onChange={(e) => handleFormChange('status', e.target.value)}
                       >
                         <option value="Generated">Generated</option>
                         <option value="Approved">Approved</option>
                         <option value="Paid">Paid</option>
                       </select>
                     </div>
-                    {selectedSalary?.status === "Paid" && (
-                      <div className="col-12">
-                        <label className="form-label">Paid At</label>
-                        <input
-                          type="datetime-local"
-                          className="form-control"
-                          defaultValue={selectedSalary?.paid_at ? new Date(selectedSalary.paid_at).toISOString().slice(0,16) : ''}
-                          disabled={modalType === 'view'}
-                        />
-                      </div>
-                    )}
                   </div>
 
-                  {/* Buttons */}
-                  <div className="d-grid gap-2 d-md-flex justify-content-md-end">
+                  {/* Action Buttons */}
+                  <div className="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                     <button
                       type="button"
-                      className="btn btn-outline-secondary px-4 py-2"
+                      className="btn btn-outline-secondary px-3 px-md-4 py-2 small"
                       onClick={closeModal}
+                      disabled={submitLoading}
                     >
                       Cancel
                     </button>
                     {modalType !== 'view' && (
                       <button
                         type="button"
-                        className="btn"
+                        className="btn px-3 px-md-4 py-2 small d-flex align-items-center justify-content-center"
                         style={{
                           backgroundColor: '#6EB2CC',
                           color: 'white',
                           border: 'none',
                           borderRadius: '8px',
-                          padding: '10px 20px',
                           fontWeight: '500',
+                          minWidth: '140px'
                         }}
-                        onClick={() => {
-                          alert(modalType === 'add' ? 'Salary record added!' : 'Salary record updated!');
-                          closeModal();
-                        }}
+                        onClick={handleSaveSalary}
+                        disabled={submitLoading}
                       >
-                        {modalType === 'add' ? 'Generate Salary' : 'Update Record'}
+                        {submitLoading ? (
+                          <>
+                            <div className="spinner-border spinner-border-sm me-2" role="status">
+                              <span className="visually-hidden">Loading...</span>
+                            </div>
+                            {modalType === 'add' ? 'Creating...' : 'Updating...'}
+                          </>
+                        ) : (
+                          <>
+                            <FaSave className="me-2" size={14} />
+                            {modalType === 'add' ? 'Generate Salary' : 'Update Record'}
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
@@ -626,48 +1110,65 @@ const SalaryCalculator = () => {
         </div>
       )}
 
-      {/* DELETE MODAL */}
+      {/* DELETE CONFIRMATION MODAL */}
       {isDeleteModalOpen && (
         <div
-          className="modal fade show"
+          className="modal fade show d-block"
           tabIndex="-1"
-          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={closeDeleteModal}
         >
           <div
-            className="modal-dialog modal-dialog-centered"
+            className="modal-dialog modal-dialog-centered m-0 m-sm-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content">
               <div className="modal-header border-0 pb-0">
-                <h5 className="modal-title fw-bold">Confirm Deletion</h5>
-                <button type="button" className="btn-close" onClick={closeDeleteModal}></button>
+                <h5 className="modal-title fw-bold h6 h5-md">Confirm Deletion</h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={closeDeleteModal}
+                  disabled={submitLoading}
+                ></button>
               </div>
-              <div className="modal-body text-center py-4">
-                <div className="display-6 text-danger mb-3">
+              <div className="modal-body text-center py-3 py-md-4">
+                <div className="text-danger mb-3" style={{ fontSize: '3rem' }}>
                   <i className="fas fa-exclamation-triangle"></i>
                 </div>
-                <h5>Are you sure?</h5>
-                <p className="text-muted">
-                  This will permanently delete salary record <strong>{selectedSalary?.salary_id}</strong>.<br />
+                <h5 className="h6 h5-md">Are you sure?</h5>
+                <p className="text-muted small small-md">
+                  This will permanently delete salary record <strong>{selectedSalary?.salaryId}</strong>.<br />
                   This action cannot be undone.
                 </p>
               </div>
-              <div className="modal-footer border-0 justify-content-center pb-4">
-                <div className="d-grid gap-2 d-sm-flex justify-content-sm-center">
+              <div className="modal-footer border-0 justify-content-center pb-3 pb-md-4">
+                <div className="d-grid gap-2 d-sm-flex justify-content-sm-center w-100">
                   <button
                     type="button"
-                    className="btn btn-outline-secondary px-4"
+                    className="btn btn-outline-secondary px-3 px-md-4 small"
                     onClick={closeDeleteModal}
+                    disabled={submitLoading}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="btn btn-danger px-4"
+                    className="btn btn-danger px-3 px-md-4 small d-flex align-items-center justify-content-center"
                     onClick={confirmDelete}
+                    disabled={submitLoading}
+                    style={{ minWidth: '100px' }}
                   >
-                    Delete
+                    {submitLoading ? (
+                      <>
+                        <div className="spinner-border spinner-border-sm me-2" role="status">
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                        Deleting...
+                      </>
+                    ) : (
+                      'Delete'
+                    )}
                   </button>
                 </div>
               </div>
