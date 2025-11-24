@@ -15,17 +15,18 @@ enum Role {
   member
   housekeeping
   receptionist
+  manager
 }
 
 // Staff Role model for dynamic role management
 model StaffRole {
-  id               Int      @id @default(autoincrement())
-  name             String   @unique
-  description      String?
-  permissions      Json?
-  status           String   @default("Active") // Active, Inactive
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  permissions Json?
+  status      String   @default("Active") // Active, Inactive
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
   staff Staff[]
@@ -145,6 +146,7 @@ model User {
   address          String?
   city             String?
   state            String?
+  addressZip       String?
   profilePhoto     String?
   joiningDate      DateTime?
   expireDate       DateTime?
@@ -168,49 +170,51 @@ model User {
   loginEnabled Boolean @default(false)
 
   // Membership renewal reminder fields
-  reminderSent   Boolean @default(false)
+  reminderSent   Boolean   @default(false)
   reminderDate   DateTime?
-  followUpNeeded Boolean @default(false)
+  followUpNeeded Boolean   @default(false)
 
   // Audit fields
   createdBy String? // Role of user who created this member (superadmin, admin, receptionist)
 
   // Relations
-  adminBranches       Branch[]                  @relation("BranchAdmin", map: "Branch_adminId_fkey")
-  createdBranches     Branch[]                  @relation("BranchCreator", map: "Branch_createdById_fkey")
-  managedMembers      User[]                    @relation("StaffMembers")
-  managedByStaff      User?                     @relation("StaffMembers", fields: [managedByStaffId], references: [id])
-  managedByStaffId    Int?
-  managedStaff        Staff[]                   @relation("StaffManager", map: "Staff_userId_fkey")
-  createdStaff        Staff[]                   @relation("StaffCreator", map: "Staff_createdById_fkey")
-  scannedQRs          QRCheck[]                 @relation("QRCheckMember", map: "QRCheck_memberId_fkey")
-  trainerClasses      ClassSchedule[]           @relation("ClassTrainer", map: "ClassSchedule_trainer_id_fkey")
-  adminClasses        ClassSchedule[]           @relation("ClassAdmin", map: "ClassSchedule_adminId_fkey")
-  bookings            PlanBooking[]
-  memberPlans         MemberPlan[]
-  createdPlans        Plan[]                    @relation("PlanAdmin", map: "Plan_adminId_fkey")
-  createdBranchPlans  BranchPlan[]              @relation("BranchPlanCreatedBy", map: "BranchPlan_createdById_fkey")
-  branchPlanBookings  BranchPlanBooking[]
-  memberBranchPlans   MemberBranchPlan[]
-  scannedQRsAsScanner QRCheck[]                 @relation("QRCheckScanner", map: "QRCheck_scannedBy_fkey")
-  groupId             Int?
-  group               Group?                    @relation("GroupMembers", fields: [groupId], references: [id])
-  classId             Int? // NEW: for class relation
-  class               ClassSchedule?            @relation("MemberClass", fields: [classId], references: [id]) // NEW
-  sessionsAsTrainer   PersonalTrainingSession[] @relation("SessionTrainer")
-  sessionsAsMember    PersonalTrainingSession[] @relation("SessionMember")
-  createdSessions     PersonalTrainingSession[] @relation("SessionCreator")
-  createdWalkIns      WalkIn[]
-  dutyRostersApproved DutyRoster[] @relation("DutyRosterApprovedBy")
-  trainerDashboards   GeneralTrainerDashboard[] @relation("TrainerDashboard")
-  memberFeedbacks     MemberFeedback[]          @relation("FeedbackTrainer")
-  salariesApproved       Salary[]             @relation("SalaryApprovedBy")
-  receptionistBookings   ReceptionistBooking[] @relation("ReceptionistBookings")
-  bookingMemberRelation  ReceptionistBooking[] @relation("BookingMembers")
-  memberAttendances      MemberAttendance[]   @relation("MemberAttendanceMember")
-  feedbacks              MemberFeedback[]     @relation("FeedbackMember")
-  payments               Payment[]            @relation("PaymentMember")
-  createdPayments        Payment[]            @relation("PaymentCreatedBy")
+  adminBranches         Branch[]                  @relation("BranchAdmin", map: "Branch_adminId_fkey")
+  createdBranches       Branch[]                  @relation("BranchCreator", map: "Branch_createdById_fkey")
+  managedMembers        User[]                    @relation("StaffMembers")
+  managedByStaff        User?                     @relation("StaffMembers", fields: [managedByStaffId], references: [id])
+  managedByStaffId      Int?
+  managedStaff          Staff[]                   @relation("StaffManager", map: "Staff_userId_fkey")
+  createdStaff          Staff[]                   @relation("StaffCreator", map: "Staff_createdById_fkey")
+  scannedQRs            QRCheck[]                 @relation("QRCheckMember", map: "QRCheck_memberId_fkey")
+  trainerClasses        ClassSchedule[]           @relation("ClassTrainer", map: "ClassSchedule_trainer_id_fkey")
+  adminClasses          ClassSchedule[]           @relation("ClassAdmin", map: "ClassSchedule_adminId_fkey")
+  bookings              PlanBooking[]
+  memberPlans           MemberPlan[]
+  createdPlans          Plan[]                    @relation("PlanAdmin", map: "Plan_adminId_fkey")
+  createdBranchPlans    BranchPlan[]              @relation("BranchPlanCreatedBy", map: "BranchPlan_createdById_fkey")
+  assignedBranchPlans   BranchPlan[]              @relation("BranchPlanTrainer")
+  branchPlanBookings    BranchPlanBooking[]
+  memberBranchPlans     MemberBranchPlan[]
+  scannedQRsAsScanner   QRCheck[]                 @relation("QRCheckScanner", map: "QRCheck_scannedBy_fkey")
+  groupId               Int?
+  group                 Group?                    @relation("GroupMembers", fields: [groupId], references: [id])
+  classId               Int? // NEW: for class relation
+  class                 ClassSchedule?            @relation("MemberClass", fields: [classId], references: [id]) // NEW
+  sessionsAsTrainer     PersonalTrainingSession[] @relation("SessionTrainer")
+  sessionsAsMember      PersonalTrainingSession[] @relation("SessionMember")
+  createdSessions       PersonalTrainingSession[] @relation("SessionCreator")
+  createdWalkIns        WalkIn[]
+  dutyRostersApproved   DutyRoster[]              @relation("DutyRosterApprovedBy")
+  trainerDashboards     GeneralTrainerDashboard[] @relation("TrainerDashboard")
+  memberFeedbacks       MemberFeedback[]          @relation("FeedbackTrainer")
+  salariesApproved      Salary[]                  @relation("SalaryApprovedBy")
+  receptionistBookings  ReceptionistBooking[]     @relation("ReceptionistBookings")
+  bookingMemberRelation ReceptionistBooking[]     @relation("BookingMembers")
+  memberAttendances     MemberAttendance[]        @relation("MemberAttendanceMember")
+  feedbacks             MemberFeedback[]          @relation("FeedbackMember")
+  payments              Payment[]                 @relation("PaymentMember")
+  createdPayments       Payment[]                 @relation("PaymentCreatedBy")
+  groupClassBookings    GroupClassBooking[]       @relation("GroupClassBookingMember")
 }
 
 // Branch model for gym branches
@@ -228,22 +232,23 @@ model Branch {
   updatedAt   DateTime     @updatedAt
 
   // Relations
-  adminId     Int
-  admin       User                      @relation("BranchAdmin", fields: [adminId], references: [id])
-  createdById Int?
-  createdBy   User?                     @relation("BranchCreator", fields: [createdById], references: [id])
-  users       User[]
-  staff       Staff[]
-  plans       Plan[]
-  branchPlans BranchPlan[]
-  qrChecks    QRCheck[]
-  attendances Attendance[]
-  classes     ClassSchedule[]
-  groups      Group[]
-  sessions    PersonalTrainingSession[]
-  walkIns     WalkIn[]
-  settings    BranchSettings? @relation("BranchSettings")
-  payments    Payment[]
+  adminId           Int
+  admin             User                      @relation("BranchAdmin", fields: [adminId], references: [id])
+  createdById       Int?
+  createdBy         User?                     @relation("BranchCreator", fields: [createdById], references: [id])
+  users             User[]
+  staff             Staff[]
+  plans             Plan[]
+  branchPlans       BranchPlan[]
+  qrChecks          QRCheck[]
+  attendances       Attendance[]
+  memberAttendances MemberAttendance[]
+  classes           ClassSchedule[]
+  groups            Group[]
+  sessions          PersonalTrainingSession[]
+  walkIns           WalkIn[]
+  settings          BranchSettings?           @relation("BranchSettings")
+  payments          Payment[]
 }
 
 // Staff model for staff management
@@ -317,11 +322,13 @@ model BranchPlan {
   currency    String   @default("INR")
   active      Boolean  @default(true)
   branchId    Int // required branch association
+  trainerId   Int? // assigned trainer
   createdById Int // who created
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   branch      Branch              @relation(fields: [branchId], references: [id], map: "BranchPlan_branchId_fkey")
+  trainer     User?               @relation("BranchPlanTrainer", fields: [trainerId], references: [id])
   createdBy   User                @relation("BranchPlanCreatedBy", fields: [createdById], references: [id], map: "BranchPlan_createdById_fkey")
   bookings    BranchPlanBooking[]
   memberPlans MemberBranchPlan[]
@@ -446,11 +453,16 @@ model ClassSchedule {
   trainerId   Int
   date        DateTime
   time        String
+  startTime   String?
+  endTime     String?
+  price       Int      @default(0) // Price in cents
   scheduleDay Json // Array of days ["Monday", "Wednesday"]
   totalSheets Int      @default(20)
   status      String   @default("Active")
   branchId    Int
   adminId     Int
+  roomName    String? // Room/location name
+  bookedSeats Int      @default(0) // Number of booked seats
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -459,6 +471,7 @@ model ClassSchedule {
   admin   User   @relation("ClassAdmin", fields: [adminId], references: [id])
   branch  Branch @relation(fields: [branchId], references: [id])
   members User[] @relation("MemberClass") // NEW: reverse relation for members in class
+  groupClassBookings GroupClassBooking[] @relation("GroupClassBookingClass")
 }
 
 // Group model for gym groups
@@ -534,152 +547,175 @@ model Membership {
 
 // DutyRoster model for staff shift allocations
 model DutyRoster {
-  id            Int              @id @default(autoincrement())
-  staffId       Int
-  staff         Staff            @relation("DutyRosterStaff", fields: [staffId], references: [id])
-  staffName     String
-  role          String
-  shiftType     ShiftType
-  date          DateTime
-  startTime     DateTime
-  endTime       DateTime
-  breaks        Json?
-  approvedBy    Int?
-  approvedByUser User?           @relation("DutyRosterApprovedBy", fields: [approvedBy], references: [id])
+  id             Int              @id @default(autoincrement())
+  staffId        Int
+  staff          Staff            @relation("DutyRosterStaff", fields: [staffId], references: [id])
+  staffName      String
+  role           String
+  shiftType      ShiftType
+  date           DateTime
+  startTime      DateTime
+  endTime        DateTime
+  breaks         Json?
+  approvedBy     Int?
+  approvedByUser User?            @relation("DutyRosterApprovedBy", fields: [approvedBy], references: [id])
   approvedByName String?
-  approvedAt    DateTime?
-  status        DutyRosterStatus @default(Scheduled)
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  approvedAt     DateTime?
+  status         DutyRosterStatus @default(Scheduled)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 }
 
 // Salary model for staff salary calculations and records
 model Salary {
-  id               Int           @id @default(autoincrement())
-  salaryId         String        @unique
-  staffId          Int
-  staff            Staff         @relation("SalaryStaff", fields: [staffId], references: [id])
-  periodStart      DateTime
-  periodEnd        DateTime
-  hoursWorked      Float?
-  hourlyTotal      Float?
-  fixedSalary      Float?
-  commissionTotal  Float?
-  bonuses          Json?
-  deductions       Json?
-  netPay           Float
-  status           SalaryStatus  @default(Generated)
-  approvedBy       Int?
-  approvedByUser   User?         @relation("SalaryApprovedBy", fields: [approvedBy], references: [id])
-  paidAt           DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id              Int          @id @default(autoincrement())
+  salaryId        String       @unique
+  staffId         Int
+  staff           Staff        @relation("SalaryStaff", fields: [staffId], references: [id])
+  periodStart     DateTime
+  periodEnd       DateTime
+  hoursWorked     Float?
+  hourlyTotal     Float?
+  fixedSalary     Float?
+  commissionTotal Float?
+  bonuses         Json?
+  deductions      Json?
+  netPay          Float
+  status          SalaryStatus @default(Generated)
+  approvedBy      Int?
+  approvedByUser  User?        @relation("SalaryApprovedBy", fields: [approvedBy], references: [id])
+  paidAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 // MemberAttendance model for member attendance records
 model MemberAttendance {
-  id               Int                   @id @default(autoincrement())
-  memberId         Int
-  member           User                  @relation("MemberAttendanceMember", fields: [memberId], references: [id])
-  memberName       String
-  status           MemberAttendanceStatus @default(Present)
-  checkInTime      String?
-  checkOutTime     String?
-  mode             String?
-  notes            String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  id           Int                    @id @default(autoincrement())
+  memberId     Int
+  member       User                   @relation("MemberAttendanceMember", fields: [memberId], references: [id])
+  memberName   String
+  branchId     Int
+  branch       Branch                 @relation(fields: [branchId], references: [id])
+  date         DateTime
+  status       MemberAttendanceStatus @default(Present)
+  checkInTime  String?
+  checkOutTime String?
+  mode         String?
+  notes        String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 }
 
 // MemberFeedback model for member feedback and suggestions
 model MemberFeedback {
-  id            Int           @id @default(autoincrement())
-  memberId      Int
-  member        User          @relation("FeedbackMember", fields: [memberId], references: [id])
-  memberName    String
-  trainerId     Int?
-  trainer       User?         @relation("FeedbackTrainer", fields: [trainerId], references: [id])
-  date          DateTime
-  type          FeedbackType
-  subject       String
-  message       String
-  status        String?       @default("Unread") // Read, Responded, etc.
-  response      String?
-  respondedAt   DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          Int          @id @default(autoincrement())
+  memberId    Int
+  member      User         @relation("FeedbackMember", fields: [memberId], references: [id])
+  memberName  String
+  trainerId   Int?
+  trainer     User?        @relation("FeedbackTrainer", fields: [trainerId], references: [id])
+  date        DateTime
+  type        FeedbackType
+  subject     String
+  message     String
+  status      String?      @default("Unread") // Read, Responded, etc.
+  response    String?
+  respondedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 // GeneralTrainerDashboard model for trainer dashboard data
 model GeneralTrainerDashboard {
-  id                Int       @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   trainerId         Int
-  trainer           User      @relation("TrainerDashboard", fields: [trainerId], references: [id])
+  trainer           User     @relation("TrainerDashboard", fields: [trainerId], references: [id])
   classesToday      Int?
   membersToTrain    Int?
   pendingFeedback   Int?
   classesThisWeek   Int?
   attendanceTrend   Json?
   classDistribution Json?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // ReceptionistBooking model for receptionist booking management
 model ReceptionistBooking {
-  id            Int       @id @default(autoincrement())
+  id             Int           @id @default(autoincrement())
   receptionistId Int
-  receptionist  User      @relation("ReceptionistBookings", fields: [receptionistId], references: [id])
-  bookingType   BookingType
-  memberId      Int
-  member        User      @relation("BookingMembers", fields: [memberId], references: [id])
-  bookingDate   DateTime
-  startTime     String
-  endTime       String
-  status        BookingStatus @default(Booked)
-  notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  receptionist   User          @relation("ReceptionistBookings", fields: [receptionistId], references: [id])
+  bookingType    BookingType
+  memberId       Int
+  member         User          @relation("BookingMembers", fields: [memberId], references: [id])
+  bookingDate    DateTime
+  startTime      String
+  endTime        String
+  status         BookingStatus @default(Booked)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 // Payment model for payment processing
 model Payment {
-  id              Int           @id @default(autoincrement())
-  paymentId       String        @unique
+  id            Int           @id @default(autoincrement())
+  paymentId     String        @unique
+  memberId      Int
+  member        User          @relation("PaymentMember", fields: [memberId], references: [id])
+  amount        Int // in cents/paise
+  currency      String        @default("INR")
+  paymentMode   PaymentMode   @default(Cash)
+  paymentStatus PaymentStatus @default(Pending)
+  description   String?
+  transactionId String?
+  createdById   Int?
+  createdBy     User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+  branchId      Int
+  branch        Branch        @relation(fields: [branchId], references: [id])
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  groupClassBooking GroupClassBooking? @relation("GroupClassBookingPayment")
+}
+
+// GroupClassBooking model for member bookings of group classes
+model GroupClassBooking {
+  id              Int      @id @default(autoincrement())
   memberId        Int
-  member          User          @relation("PaymentMember", fields: [memberId], references: [id])
-  amount          Int // in cents/paise
-  currency        String        @default("INR")
-  paymentMode     PaymentMode   @default(Cash)
-  paymentStatus   PaymentStatus @default(Pending)
-  description     String?
-  transactionId   String?
-  createdById     Int?
-  createdBy       User?         @relation("PaymentCreatedBy", fields: [createdById], references: [id])
-  branchId        Int
-  branch          Branch        @relation(fields: [branchId], references: [id])
-  paidAt          DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  classScheduleId Int
+  bookedAt        DateTime @default(now())
+  status          String   @default("Booked") // Booked, Canceled
+  paymentId       Int?     @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  member        User          @relation("GroupClassBookingMember", fields: [memberId], references: [id])
+  classSchedule ClassSchedule @relation("GroupClassBookingClass", fields: [classScheduleId], references: [id])
+  payment       Payment?      @relation("GroupClassBookingPayment", fields: [paymentId], references: [id])
 }
 
 // BranchSettings model for branch-specific configurations
 model BranchSettings {
-  id                          Int       @id @default(autoincrement())
-  branchId                    Int       @unique
-  branch                      Branch    @relation("BranchSettings", fields: [branchId], references: [id])
-  maxClassSize                Int       @default(20)
-  maxPTSessions               Int       @default(10)
-  bookingBuffer               Int       @default(30) // minutes
-  cancellationDays            Int       @default(1) // days in advance for cancellation
-  operatingHours              Json?
-  holidays                    Json?
-  notifications_enabled       Boolean?  @default(false)
-  sms_notifications_enabled   Boolean?  @default(false)
-  in_app_notifications_enabled Boolean?  @default(false)
-  notification_message        String?
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
+  id                           Int      @id @default(autoincrement())
+  branchId                     Int      @unique
+  branch                       Branch   @relation("BranchSettings", fields: [branchId], references: [id])
+  maxClassSize                 Int      @default(20)
+  maxPTSessions                Int      @default(10)
+  bookingBuffer                Int      @default(30) // minutes
+  cancellationDays             Int      @default(1) // days in advance for cancellation
+  operatingHours               Json?
+  holidays                     Json?
+  notifications_enabled        Boolean? @default(false)
+  sms_notifications_enabled    Boolean? @default(false)
+  in_app_notifications_enabled Boolean? @default(false)
+  notification_message         String?
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 }
 
 // QRCheck model for QR code check-ins (already exists, but ensuring it's complete)

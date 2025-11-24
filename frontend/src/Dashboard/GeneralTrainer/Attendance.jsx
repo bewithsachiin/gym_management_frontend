@@ -6,6 +6,9 @@ const Attendance = () => {
   const [search, setSearch] = useState("");
   // 👇 naya state for view modal
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [viewMember, setViewMember] = useState(null);
   // 👇 filter states
   const [filters, setFilters] = useState({

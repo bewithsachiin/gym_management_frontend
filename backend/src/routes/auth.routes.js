@@ -3,16 +3,24 @@ const authController = require('../controllers/auth.controller');
 
 const router = express.Router();
 
-// POST /api/auth/login
-router.post('/login', authController.login);
+router.post('/login', (req, res, next) => {
+  console.log("🔐 [REQUEST] /login", req.body);
+  return authController.login(req, res, next);
+});
 
-// POST /api/auth/signup
-router.post('/signup', authController.signup);
+router.post('/signup', (req, res, next) => {
+  console.log("🧾 [REQUEST] /signup", req.body);
+  return authController.signup(req, res, next);
+});
 
-// POST /api/auth/forgot-password
-router.post('/forgot-password', authController.forgotPassword);
+router.post('/forgot-password', (req, res, next) => {
+  console.log("📨 [REQUEST] /forgot-password", req.body);
+  return authController.forgotPassword(req, res, next);
+});
 
-// POST /api/auth/reset-password
-router.post('/reset-password', authController.resetPassword);
+router.post('/reset-password', (req, res, next) => {
+  console.log("🔄 [REQUEST] /reset-password", req.body);
+  return authController.resetPassword(req, res, next);
+});
 
 module.exports = router;

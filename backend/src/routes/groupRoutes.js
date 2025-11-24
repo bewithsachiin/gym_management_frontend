@@ -3,37 +3,46 @@ const router = express.Router();
 
 const groupController = require('../controllers/groupController');
 const { groupUpload } = require('../middlewares/uploadMiddleware');
-
 const { authenticateToken } = require('../middlewares/auth.middleware');
 const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
 
-// -------------------------------------------------------------
-// COMMON MIDDLEWARE PRESETS
-// -------------------------------------------------------------
-const protect = [authenticateToken, accessControl()];
+// ========================================
+// VIEW ACCESS: ALL STAFF (only own branch if not superadmin)
+// superadmin | admin | trainers | receptionist
+// ========================================
+const viewOnly = [
+  authenticateToken,
+  accessControl(),
+  (req, res, next) => {
+    console.log(`👁️ [GROUP VIEW] role=${req.user.role}, branch=${req.user.branchId}`);
+    next();
+  }
+];
+
+// ========================================
+// MODIFY ACCESS: superadmin + admin only
+// ========================================
 const adminOnly = [
   authenticateToken,
   accessControl(),
-  checkPermission(['superadmin', 'admin'])
+  checkPermission(['superadmin', 'admin']),
+  (req, res, next) => {
+    console.log(`✏️ [GROUP MODIFY] role=${req.user.role}, branch=${req.user.branchId}`);
+    next();
+  }
 ];
 
-// -------------------------------------------------------------
-// GROUP CRUD ROUTES
-// -------------------------------------------------------------
+// ========================================
+// ROUTES
+// ========================================
 
-// Get all groups
-router.get('/', protect, groupController.getGroups);
+// VIEW groups
+router.get('/', viewOnly, groupController.getGroups);
+router.get('/:id', viewOnly, groupController.getGroup);
 
-// Get single group
-router.get('/:id', protect, groupController.getGroup);
-
-// Create new group (superadmin/admin)
+// MODIFY groups
 router.post('/', adminOnly, groupUpload, groupController.createGroup);
-
-// Update group (superadmin/admin)
 router.put('/:id', adminOnly, groupUpload, groupController.updateGroup);
-
-// Delete group (superadmin/admin)
 router.delete('/:id', adminOnly, groupController.deleteGroup);
 
 module.exports = router;

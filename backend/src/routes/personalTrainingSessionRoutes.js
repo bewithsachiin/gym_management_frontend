@@ -33,8 +33,8 @@ router.get('/',
   personalTrainingSessionController.getSessions
 );
 
-// Get session by ID
-router.get('/:id',
+// Get session by ID (restrict to number only)
+router.get('/:id(\\d+)',
   authenticateToken,
   accessControl(),
   personalTrainingSessionController.getSessionById
@@ -48,16 +48,16 @@ router.post('/',
   personalTrainingSessionController.createSession
 );
 
-// Update session
-router.put('/:id',
+// Update session (restrict to number only)
+router.put('/:id(\\d+)',
   authenticateToken,
   accessControl(),
   checkPermission(['superadmin', 'admin', 'personaltrainer']),
   personalTrainingSessionController.updateSession
 );
 
-// Delete session
-router.delete('/:id',
+// Delete session (restrict to number only)
+router.delete('/:id(\\d+)',
   authenticateToken,
   accessControl(),
   checkPermission(['superadmin', 'admin']),

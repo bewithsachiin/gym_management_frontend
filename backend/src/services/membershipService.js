@@ -1,102 +1,135 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-class MembershipService {
-  // Helper method to format date
-  formatDate(date) {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(date).toLocaleDateString('en-US', options);
-  }
+// ----------------------------------------------------
+// 🔧 Helper: Format Date -> "Month DD, YYYY"
+// ----------------------------------------------------
+const formatDate = (date) => {
+  if (!date) return null;
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric'
+  });
+};
 
-  // Get all memberships with search and pagination
-  async getAllMemberships(search, page, limit) {
-    const skip = (page - 1) * limit;
-    const where = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { title: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {};
+// ----------------------------------------------------
+// 🔧 Helper: Convert numbers like "₹1000" or "1000" to cents
+// ----------------------------------------------------
+const parseAmountToCents = (amount) => {
+  if (!amount) return 0;
+  const clean = amount.toString().replace(/[₹,\s]/g, '');
+  return Math.round(parseFloat(clean) * 100);
+};
 
-    const memberships = await prisma.membership.findMany({
-      where,
-      skip,
-      take: limit,
-      orderBy: { createdAt: 'desc' },
-    });
+// ----------------------------------------------------
+// 📌 GET ALL MEMBERSHIPS
+// ----------------------------------------------------
+const getAllMemberships = async (search, page, limit) => {
+  const skip = (page - 1) * limit;
 
-    const total = await prisma.membership.count({ where });
+  const where = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { title: { contains: search, mode: 'insensitive' } },
+        ],
+      }
+    : {};
 
-    // Transform memberships to match frontend format
-    const transformedMemberships = memberships.map(membership => ({
-      id: membership.id,
-      title: membership.title,
-      name: membership.name,
-      amount: (membership.amount / 100).toString(),
-      paidAmount: (membership.paidAmount / 100).toString(),
-      dueAmount: (membership.dueAmount / 100).toString(),
-      startDate: this.formatDate(membership.startDate),
-      endDate: this.formatDate(membership.endDate),
-      paymentStatus: membership.paymentStatus,
-    }));
+  const memberships = await prisma.membership.findMany({
+    where,
+    skip,
+    take: limit,
+    orderBy: { createdAt: 'desc' },
+  });
 
-    return {
-      memberships: transformedMemberships,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
+  const total = await prisma.membership.count({ where });
 
-  // Get membership by ID
-  async getMembershipById(id) {
-    const membership = await prisma.membership.findUnique({
-      where: { id: parseInt(id) },
-    });
+  return {
+    memberships: memberships.map(m => ({
+      id: m.id,
+      title: m.title,
+      name: m.name,
+      amount: (m.amount / 100).toString(),
+      paidAmount: (m.paidAmount / 100).toString(),
+      dueAmount: (m.dueAmount / 100).toString(),
+      startDate: formatDate(m.startDate),
+      endDate: formatDate(m.endDate),
+      paymentStatus: m.paymentStatus,
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
 
-    if (membership) {
-      return {
-        id: membership.id,
-        title: membership.title,
-        name: membership.name,
-        amount: (membership.amount / 100).toString(),
-        paidAmount: (membership.paidAmount / 100).toString(),
-        dueAmount: (membership.dueAmount / 100).toString(),
-        startDate: this.formatDate(membership.startDate),
-        endDate: this.formatDate(membership.endDate),
-        paymentStatus: membership.paymentStatus,
-      };
-    }
+// ----------------------------------------------------
+// 📌 GET MEMBERSHIP BY ID
+// ----------------------------------------------------
+const getMembershipById = async (id) => {
+  const m = await prisma.membership.findUnique({
+    where: { id: parseInt(id) },
+  });
 
-    return membership;
-  }
+  if (!m) return null;
 
-  // Create a new membership
-  async createMembership(data) {
-    return await prisma.membership.create({
-      data,
-    });
-  }
+  return {
+    id: m.id,
+    title: m.title,
+    name: m.name,
+    amount: (m.amount / 100).toString(),
+    paidAmount: (m.paidAmount / 100).toString(),
+    dueAmount: (m.dueAmount / 100).toString(),
+    startDate: formatDate(m.startDate),
+    endDate: formatDate(m.endDate),
+    paymentStatus: m.paymentStatus,
+  };
+};
 
-  // Update membership
-  async updateMembership(id, data) {
-    return await prisma.membership.update({
-      where: { id: parseInt(id) },
-      data,
-    });
-  }
+// ----------------------------------------------------
+// 📌 CREATE MEMBERSHIP
+// ----------------------------------------------------
+const createMembership = async (data) => {
+  return await prisma.membership.create({
+    data: {
+      ...data,
+      amount: parseAmountToCents(data.amount),
+      paidAmount: parseAmountToCents(data.paidAmount),
+      dueAmount: parseAmountToCents(data.dueAmount),
+    },
+  });
+};
 
-  // Delete membership
-  async deleteMembership(id) {
-    return await prisma.membership.delete({
-      where: { id: parseInt(id) },
-    });
-  }
-}
+// ----------------------------------------------------
+// 📌 UPDATE MEMBERSHIP
+// ----------------------------------------------------
+const updateMembership = async (id, data) => {
+  return await prisma.membership.update({
+    where: { id: parseInt(id) },
+    data: {
+      ...data,
+      amount: data.amount ? parseAmountToCents(data.amount) : undefined,
+      paidAmount: data.paidAmount ? parseAmountToCents(data.paidAmount) : undefined,
+      dueAmount: data.dueAmount ? parseAmountToCents(data.dueAmount) : undefined,
+    },
+  });
+};
 
-module.exports = new MembershipService();
+// ----------------------------------------------------
+// ❌ DELETE MEMBERSHIP
+// ----------------------------------------------------
+const deleteMembership = async (id) => {
+  return await prisma.membership.delete({
+    where: { id: parseInt(id) },
+  });
+};
+
+module.exports = {
+  getAllMemberships,
+  getMembershipById,
+  createMembership,
+  updateMembership,
+  deleteMembership,
+};

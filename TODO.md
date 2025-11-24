@@ -1,10 +1,11 @@
-# TODO: Implement Branch Management Backend with Notifications
+# TODO: API Integration for Account.jsx
 
-## Steps to Complete
-
-- [ ] Update Prisma schema: Add optional notification fields (notifications_enabled, sms_notifications_enabled, in_app_notifications_enabled, notification_message) to BranchSettings model
-- [ ] Update branchService.js: Include BranchSettings in getAllBranches, createBranch, updateBranch queries
-- [ ] Update branchController.js: Handle new fields in create/update operations
-- [ ] Run Prisma migration after schema update
-- [ ] Test API endpoints to ensure new fields are handled correctly
-- [ ] Update frontend to integrate with new backend (if needed, but focus on backend first)
+## Tasks
+- [ ] Import axiosInstance and useEffect
+- [ ] Add loading, error, and initialData states
+- [ ] Implement fetchProfile function with useEffect
+- [ ] Update handleSaveMember to call update profile API
+- [ ] Update password change handler to call change password API
+- [ ] Remove mock data from initial states
+- [ ] Update reset handler to use initialData
+- [ ] Add loading indicators and error handling in UI

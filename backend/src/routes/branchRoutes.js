@@ -10,32 +10,63 @@ const { authenticateToken } = require('../middlewares/auth.middleware');
 const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
 
 // ----------------------------------------
-// Common Middleware Groups
+// Common Middleware Groups (DEBUG FRIENDLY)
 // ----------------------------------------
 
-// Normal authenticated + role-validated user
-const protect = [authenticateToken, accessControl()];
+console.log("🔐 [Routes] Initializing Branch Route Middlewares...");
 
-// Only superadmin allowed
-const superAdminOnly = [authenticateToken, accessControl(), checkPermission(['superadmin','admin'])];
+// Authenticated + Role + Branch Scoped Users
+const protect = [
+  (req, res, next) => { console.log("🔑 [Middleware] authenticateToken → protect"); next(); },
+  authenticateToken,
+  (req, res, next) => { console.log("🛂 [Middleware] accessControl() → protect"); next(); },
+  accessControl()
+];
+
+// SuperAdmin/ Admin Only Section
+const superAdminOnly = [
+  (req, res, next) => { console.log("👑 [Middleware] authenticateToken → superAdminOnly"); next(); },
+  authenticateToken,
+  (req, res, next) => { console.log("🛂 [Middleware] accessControl() → superAdminOnly"); next(); },
+  accessControl(),
+  (req, res, next) => { console.log("🎟️ [Middleware] checkPermission(['superadmin','admin'])"); next(); },
+  checkPermission(['superadmin', 'admin'])
+];
 
 // ----------------------------------------
-// Branch Routes
+// Branch Routes (DEBUG LOGS)
 // ----------------------------------------
 
 // Get all branches
-router.get('/', protect, branchController.getBranches);
+router.get('/', protect, (req, res, next) => {
+  console.log("📌 [Route] GET /api/v1/branches");
+  return branchController.getBranches(req, res, next);
+});
 
 // Get available admins (superadmin only)
-router.get('/available-admins', superAdminOnly, branchController.getAvailableAdmins);
+router.get('/available-admins', superAdminOnly, (req, res, next) => {
+  console.log("📌 [Route] GET /api/v1/branches/available-admins");
+  return branchController.getAvailableAdmins(req, res, next);
+});
 
 // Create a branch (superadmin only)
-router.post('/', superAdminOnly, uploadMiddleware, branchController.createBranch);
+router.post('/', superAdminOnly, uploadMiddleware, (req, res, next) => {
+  console.log("📌 [Route] POST /api/v1/branches → Create Branch");
+  console.log("🖼️ Upload Middleware Applied");
+  return branchController.createBranch(req, res, next);
+});
 
 // Update branch info (superadmin only)
-router.put('/:id', superAdminOnly, uploadMiddleware, branchController.updateBranch);
+router.put('/:id', superAdminOnly, uploadMiddleware, (req, res, next) => {
+  console.log(`📌 [Route] PUT /api/v1/branches/${req.params.id} → Update Branch`);
+  console.log("🖼️ Upload Middleware Applied");
+  return branchController.updateBranch(req, res, next);
+});
 
 // Delete branch (superadmin only)
-router.delete('/:id', superAdminOnly, branchController.deleteBranch);
+router.delete('/:id', superAdminOnly, (req, res, next) => {
+  console.log(`📌 [Route] DELETE /api/v1/branches/${req.params.id}`);
+  return branchController.deleteBranch(req, res, next);
+});
 
 module.exports = router;

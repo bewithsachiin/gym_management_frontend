@@ -186,4 +186,106 @@ module.exports = {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
+
+
+  // ----------------------------------------------------
+  // 📌 GET MEMBER PROFILE
+  // ----------------------------------------------------
+  getMemberProfile: async (req, res) => {
+    try {
+      const id = req.params.id;
+
+      const member = await memberService.getMemberProfileService(id);
+
+      if (!member) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Member not found" });
+      }
+
+      return res.json({
+        success: true,
+        message: "Member profile fetched successfully",
+        data: member,
+      });
+
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+
+  // ----------------------------------------------------
+  // 📌 GET MY PROFILE (for member self-service)
+  // ----------------------------------------------------
+  getMyProfile: async (req, res) => {
+    try {
+      const userId = req.user.id;
+
+      const member = await memberService.getMyProfileService(userId);
+
+      if (!member) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Member not found" });
+      }
+
+      return res.json({
+        success: true,
+        message: "Member profile fetched successfully",
+        data: member,
+      });
+
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+
+  // ----------------------------------------------------
+  // 📌 UPDATE MY PROFILE (for member self-service)
+  // ----------------------------------------------------
+  updateMyProfile: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const data = req.body;
+
+      // Update image only if new file uploaded
+      if (req.file) {
+        data.profile_picture = req.file.path;
+      }
+
+      const updatedMember = await memberService.updateMyProfileService(userId, data);
+
+      return res.json({
+        success: true,
+        message: "Member profile updated successfully",
+        data: updatedMember,
+      });
+
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+
+  // ----------------------------------------------------
+  // 📌 CHANGE MY PASSWORD (for member self-service)
+  // ----------------------------------------------------
+  changeMyPassword: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { currentPassword, newPassword } = req.body;
+
+      const result = await memberService.changeMyPasswordService(userId, currentPassword, newPassword);
+
+      return res.json({
+        success: true,
+        message: result.message,
+      });
+
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
 };

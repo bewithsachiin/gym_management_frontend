@@ -1,19 +1,23 @@
 const prisma = require("../config/db");
 
+// 🧪 Debug helper
+const debugService = (label, extra = {}) => {
+  console.log(`\n🔧 [SERVICE] ${label}`);
+  if (extra) console.log("📌 Data:", extra);
+};
+
+const safeDate = (d) => (d ? d.toISOString().split("T")[0] : null);
+
 // ----------------------------------------------------
 // 📌 GET ALL MEMBERS
 // ----------------------------------------------------
 const getMembersService = async (branchId, search, isSuperAdmin) => {
-  const where = {
-    role: "member",
-  };
+  debugService("GET MEMBERS", { branchId, search, isSuperAdmin });
 
-  // Branch filter unless superadmin
-  if (!isSuperAdmin && branchId) {
-    where.branchId = branchId;
-  }
+  const where = { role: "member" };
 
-  // Search filter
+  if (!isSuperAdmin && branchId) where.branchId = branchId;
+
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: "insensitive" } },
@@ -26,28 +30,23 @@ const getMembersService = async (branchId, search, isSuperAdmin) => {
 
   const members = await prisma.user.findMany({
     where,
-    include: {
-      plan: true,
-      branch: true,
-    },
+    include: { plan: true, branch: true },
     orderBy: { createdAt: "desc" },
   });
 
-  // Map to frontend expected format
-  return members.map((member) => ({
-    id: member.id,
-    name: `${member.firstName} ${member.lastName}`,
-    memberId: member.memberId,
-    joiningDate: member.joiningDate ? member.joiningDate.toISOString().split("T")[0] : null,
-    expireDate: member.expireDate ? member.expireDate.toISOString().split("T")[0] : null,
-    type: member.memberType || "Member",
-    status: member.memberStatus || "Active",
-    membershipStatus: member.membershipStatus || "Activate",
-    photo: member.profilePhoto,
-    plan: member.plan ? member.plan.plan_name : null,
-    email: member.email,
-    phone: member.phone,
-    // Add other fields as needed
+  return members.map((m) => ({
+    id: m.id,
+    name: `${m.firstName} ${m.lastName}`,
+    memberId: m.memberId,
+    joiningDate: safeDate(m.joiningDate),
+    expireDate: safeDate(m.expireDate),
+    type: m.memberType || "Member",
+    status: m.memberStatus || "Active",
+    membershipStatus: m.membershipStatus || "Activate",
+    photo: m.profilePhoto,
+    plan: m.plan ? m.plan.plan_name : null,
+    email: m.email,
+    phone: m.phone,
   }));
 };
 
@@ -55,57 +54,50 @@ const getMembersService = async (branchId, search, isSuperAdmin) => {
 // 📌 GET SINGLE MEMBER
 // ----------------------------------------------------
 const getMemberByIdService = async (id, branchId, isSuperAdmin) => {
-  const where = {
-    id: parseInt(id),
-    role: "member",
-  };
+  debugService("GET MEMBER BY ID", { id, branchId, isSuperAdmin });
 
-  if (!isSuperAdmin && branchId) {
-    where.branchId = branchId;
-  }
+  const where = { id: parseInt(id), role: "member" };
+  if (!isSuperAdmin && branchId) where.branchId = branchId;
 
-  const member = await prisma.user.findFirst({
+  const m = await prisma.user.findFirst({
     where,
-    include: {
-      plan: true,
-      branch: true,
-    },
+    include: { plan: true, branch: true },
   });
 
-  if (!member) return null;
+  if (!m) return null;
 
   return {
-    id: member.id,
-    firstName: member.firstName,
-    lastName: member.lastName,
-    middleName: member.middleName,
-    email: member.email,
-    phone: member.phone,
-    address: member.address,
-    city: member.city,
-    state: member.state,
-    gender: member.gender,
-    dob: member.dob ? member.dob.toISOString().split("T")[0] : null,
-    joiningDate: member.joiningDate ? member.joiningDate.toISOString().split("T")[0] : null,
-    expireDate: member.expireDate ? member.expireDate.toISOString().split("T")[0] : null,
-    memberId: member.memberId,
-    memberType: member.memberType || "Member",
-    memberStatus: member.memberStatus || "Active",
-    membershipStatus: member.membershipStatus || "Activate",
-    plan: member.plan ? member.plan.plan_name : null,
-    planId: member.planId,
-    profilePhoto: member.profilePhoto,
-    weight: member.weight,
-    height: member.height,
-    chest: member.chest,
-    waist: member.waist,
-    thigh: member.thigh,
-    arms: member.arms,
-    fat: member.fat,
-    username: member.username,
-    loginEnabled: member.loginEnabled,
-    branchId: member.branchId,
-    branch: member.branch,
+    id: m.id,
+    firstName: m.firstName,
+    lastName: m.lastName,
+    middleName: m.middleName,
+    email: m.email,
+    phone: m.phone,
+    address: m.address,
+    city: m.city,
+    state: m.state,
+    gender: m.gender,
+    dob: safeDate(m.dob),
+    joiningDate: safeDate(m.joiningDate),
+    expireDate: safeDate(m.expireDate),
+    memberId: m.memberId,
+    memberType: m.memberType || "Member",
+    memberStatus: m.memberStatus || "Active",
+    membershipStatus: m.membershipStatus || "Activate",
+    plan: m.plan ? m.plan.plan_name : null,
+    planId: m.planId,
+    profilePhoto: m.profilePhoto,
+    weight: m.weight,
+    height: m.height,
+    chest: m.chest,
+    waist: m.waist,
+    thigh: m.thigh,
+    arms: m.arms,
+    fat: m.fat,
+    username: m.username,
+    loginEnabled: m.loginEnabled,
+    branchId: m.branchId,
+    branch: m.branch,
   };
 };
 
@@ -113,59 +105,33 @@ const getMemberByIdService = async (id, branchId, isSuperAdmin) => {
 // 📌 CREATE MEMBER
 // ----------------------------------------------------
 const createMemberService = async (data) => {
-  // If plan provided as string, find planId
+  debugService("CREATE MEMBER", data);
+
   let planId = null;
   if (data.plan) {
-    const plan = await prisma.plan.findFirst({
-      where: { plan_name: data.plan },
-    });
+    const plan = await prisma.plan.findFirst({ where: { plan_name: data.plan } });
     if (plan) planId = plan.id;
   }
 
   const member = await prisma.user.create({
     data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      middleName: data.middleName,
-      email: data.email,
-      password: data.password,
+      ...data,
       role: "member",
-      memberId: data.memberId,
-      gender: data.gender,
       dob: data.dob ? new Date(data.dob) : null,
-      phone: data.phone,
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      profilePhoto: data.photo,
       joiningDate: data.joiningDate ? new Date(data.joiningDate) : new Date(),
       expireDate: data.expireDate ? new Date(data.expireDate) : null,
-      memberType: data.type || "Member",
-      memberStatus: data.status || "Active",
-      membershipStatus: data.membershipStatus || "Activate",
-      planId: planId,
-      weight: data.weight,
-      height: data.height,
-      chest: data.chest,
-      waist: data.waist,
-      thigh: data.thigh,
-      arms: data.arms,
-      fat: data.fat,
-      username: data.username,
-      loginEnabled: data.loginEnabled || false,
-      branchId: data.branchId, // Assume passed or from context
+      planId,
+      profilePhoto: data.photo,
     },
-    include: {
-      plan: true,
-    },
+    include: { plan: true },
   });
 
   return {
     id: member.id,
     name: `${member.firstName} ${member.lastName}`,
     memberId: member.memberId,
-    joiningDate: member.joiningDate ? member.joiningDate.toISOString().split("T")[0] : null,
-    expireDate: member.expireDate ? member.expireDate.toISOString().split("T")[0] : null,
+    joiningDate: safeDate(member.joiningDate),
+    expireDate: safeDate(member.expireDate),
     type: member.memberType,
     status: member.memberStatus,
     membershipStatus: member.membershipStatus,
@@ -178,63 +144,37 @@ const createMemberService = async (data) => {
 // 📌 UPDATE MEMBER
 // ----------------------------------------------------
 const updateMemberService = async (id, data) => {
-  // If plan provided as string, find planId
+  debugService("UPDATE MEMBER", { id, data });
+
   let planId = undefined;
   if (data.planId !== undefined) {
     planId = data.planId;
   } else if (data.plan !== undefined) {
     if (data.plan) {
-      const plan = await prisma.plan.findFirst({
-        where: { plan_name: data.plan },
-      });
+      const plan = await prisma.plan.findFirst({ where: { plan_name: data.plan } });
       planId = plan ? plan.id : null;
-    } else {
-      planId = null;
-    }
+    } else planId = null;
   }
 
   const updated = await prisma.user.update({
     where: { id: parseInt(id) },
     data: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      middleName: data.middleName,
-      email: data.email,
-      memberId: data.memberId,
-      gender: data.gender,
-      dob: data.dob ? new Date(data.dob) : null,
-      phone: data.phone,
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      profilePhoto: data.photo,
+      ...data,
+      dob: data.dob ? new Date(data.dob) : undefined,
       joiningDate: data.joiningDate ? new Date(data.joiningDate) : undefined,
       expireDate: data.expireDate ? new Date(data.expireDate) : undefined,
-      memberType: data.type,
-      memberStatus: data.status,
-      membershipStatus: data.membershipStatus,
-      planId: planId,
-      weight: data.weight,
-      height: data.height,
-      chest: data.chest,
-      waist: data.waist,
-      thigh: data.thigh,
-      arms: data.arms,
-      fat: data.fat,
-      username: data.username,
-      loginEnabled: data.loginEnabled,
+      profilePhoto: data.photo,
+      planId,
     },
-    include: {
-      plan: true,
-    },
+    include: { plan: true },
   });
 
   return {
     id: updated.id,
     name: `${updated.firstName} ${updated.lastName}`,
     memberId: updated.memberId,
-    joiningDate: updated.joiningDate ? updated.joiningDate.toISOString().split("T")[0] : null,
-    expireDate: updated.expireDate ? updated.expireDate.toISOString().split("T")[0] : null,
+    joiningDate: safeDate(updated.joiningDate),
+    expireDate: safeDate(updated.expireDate),
     type: updated.memberType,
     status: updated.memberStatus,
     membershipStatus: updated.membershipStatus,
@@ -247,6 +187,8 @@ const updateMemberService = async (id, data) => {
 // 📌 ACTIVATE / DEACTIVATE MEMBER
 // ----------------------------------------------------
 const activateMemberService = async (id) => {
+  debugService("ACTIVATE/DEACTIVATE MEMBER", { id });
+
   const member = await prisma.user.findUnique({
     where: { id: parseInt(id) },
   });
@@ -258,9 +200,7 @@ const activateMemberService = async (id) => {
   const updated = await prisma.user.update({
     where: { id: parseInt(id) },
     data: { membershipStatus: newStatus },
-    include: {
-      plan: true,
-    },
+    include: { plan: true },
   });
 
   return {
@@ -275,53 +215,187 @@ const activateMemberService = async (id) => {
 // 📌 DELETE MEMBER
 // ----------------------------------------------------
 const deleteMemberService = async (id) => {
-  const memberId = parseInt(id);
+  debugService("DELETE MEMBER", { id });
 
-  // Helper function: delete safely
+  const memberId = parseInt(id);
   const safeDeleteMany = async (model, where) => {
-    if (model?.deleteMany) {
-      await model.deleteMany({ where });
-    }
+    if (model?.deleteMany) await model.deleteMany({ where });
   };
 
-  // 1. MemberAttendance
   await safeDeleteMany(prisma.memberAttendance, { memberId });
-
-  // 2. Attendance
   await safeDeleteMany(prisma.attendance, { memberId });
-
-  // 3. QRCheck
-  await safeDeleteMany(prisma.qrCheck, {
-    OR: [{ memberId }, { scannedBy: memberId }]
-  });
-
-  // 4. PlanBooking
+  await safeDeleteMany(prisma.qrCheck, { OR: [{ memberId }, { scannedBy: memberId }] });
   await safeDeleteMany(prisma.planBooking, { memberId });
-
-  // 5. MemberPlan
   await safeDeleteMany(prisma.memberPlan, { memberId });
-
-  // 6. BranchPlanBooking
   await safeDeleteMany(prisma.branchPlanBooking, { memberId });
-
-  // 7. MemberBranchPlan
   await safeDeleteMany(prisma.memberBranchPlan, { memberId });
-
-  // 8. PersonalTrainingSession
   await safeDeleteMany(prisma.personalTrainingSession, { memberId });
-
-  // 9. MemberFeedback
   await safeDeleteMany(prisma.memberFeedback, { memberId });
-
-  // 10. Payment
   await safeDeleteMany(prisma.payment, { memberId });
 
-  // 11. Finally delete User (safe)
-  if (prisma.user?.delete) {
-    await prisma.user.delete({
-      where: { id: memberId },
-    });
-  }
+  if (prisma.user?.delete) await prisma.user.delete({ where: { id: memberId } });
+};
+
+// ----------------------------------------------------
+// 📌 GET MEMBER PROFILE
+// ----------------------------------------------------
+const getMemberProfileService = async (id) => {
+  debugService("GET MEMBER PROFILE", { id });
+
+  const m = await prisma.user.findFirst({
+    where: { id: parseInt(id), role: "member" },
+    include: { plan: true, branch: true },
+  });
+
+  if (!m) return null;
+
+  return {
+    id: m.id,
+    firstName: m.firstName,
+    lastName: m.lastName,
+    middleName: m.middleName,
+    email: m.email,
+    phone: m.phone,
+    address: m.address,
+    city: m.city,
+    state: m.state,
+    gender: m.gender,
+    dob: safeDate(m.dob),
+    joiningDate: safeDate(m.joiningDate),
+    expireDate: safeDate(m.expireDate),
+    memberId: m.memberId,
+    memberType: m.memberType || "Member",
+    memberStatus: m.memberStatus || "Active",
+    membershipStatus: m.membershipStatus || "Activate",
+    plan: m.plan ? m.plan.plan_name : null,
+    planId: m.planId,
+    profilePhoto: m.profilePhoto,
+    weight: m.weight,
+    height: m.height,
+    chest: m.chest,
+    waist: m.waist,
+    thigh: m.thigh,
+    arms: m.arms,
+    fat: m.fat,
+    username: m.username,
+    loginEnabled: m.loginEnabled,
+    branchId: m.branchId,
+    branch: m.branch,
+  };
+};
+
+// ----------------------------------------------------
+// 📌 GET MEMBER PROFILE (for member self-service)
+// ----------------------------------------------------
+const getMyProfileService = async (userId) => {
+  debugService("GET MY PROFILE", { userId });
+
+  const m = await prisma.user.findFirst({
+    where: { id: parseInt(userId), role: "member" },
+    include: { plan: true, branch: true },
+  });
+
+  if (!m) return null;
+
+  return {
+    member_id: m.memberId,
+    first_name: m.firstName,
+    last_name: m.lastName,
+    gender: m.gender,
+    dob: safeDate(m.dob),
+    email: m.email,
+    phone: m.phone,
+    address_street: m.address,
+    address_city: m.city,
+    address_state: m.state,
+    address_zip: m.addressZip,
+    profile_picture: m.profilePhoto,
+    profile_preview: m.profilePhoto,
+    membership_plan: m.plan ? m.plan.plan_name : null,
+    plan_start_date: safeDate(m.joiningDate),
+    plan_end_date: safeDate(m.expireDate),
+    status: m.memberStatus || "Active",
+    membership_type: m.memberType || "Member",
+    membership_fee: m.plan ? (m.plan.price_cents / 100).toString() : "0",
+  };
+};
+
+// ----------------------------------------------------
+// 📌 UPDATE MEMBER PROFILE (for member self-service)
+// ----------------------------------------------------
+const updateMyProfileService = async (userId, data) => {
+  debugService("UPDATE MY PROFILE", { userId, data });
+
+  const updateData = {
+    firstName: data.first_name,
+    lastName: data.last_name,
+    gender: data.gender,
+    dob: data.dob ? new Date(data.dob) : undefined,
+    email: data.email,
+    phone: data.phone,
+    address: data.address_street,
+    city: data.address_city,
+    state: data.address_state,
+    addressZip: data.address_zip,
+    profilePhoto: data.profile_picture,
+  };
+
+  // Remove undefined values
+  Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+  const updated = await prisma.user.update({
+    where: { id: parseInt(userId) },
+    data: updateData,
+    include: { plan: true },
+  });
+
+  return {
+    member_id: updated.memberId,
+    first_name: updated.firstName,
+    last_name: updated.lastName,
+    gender: updated.gender,
+    dob: safeDate(updated.dob),
+    email: updated.email,
+    phone: updated.phone,
+    address_street: updated.address,
+    address_city: updated.city,
+    address_state: updated.state,
+    address_zip: updated.addressZip,
+    profile_picture: updated.profilePhoto,
+    profile_preview: updated.profilePhoto,
+    membership_plan: updated.plan ? updated.plan.plan_name : null,
+    plan_start_date: safeDate(updated.joiningDate),
+    plan_end_date: safeDate(updated.expireDate),
+    status: updated.memberStatus || "Active",
+    membership_type: updated.memberType || "Member",
+    membership_fee: updated.plan ? (updated.plan.price_cents / 100).toString() : "0",
+  };
+};
+
+// ----------------------------------------------------
+// 📌 CHANGE MEMBER PASSWORD (for member self-service)
+// ----------------------------------------------------
+const changeMyPasswordService = async (userId, currentPassword, newPassword) => {
+  debugService("CHANGE MY PASSWORD", { userId });
+
+  const user = await prisma.user.findUnique({
+    where: { id: parseInt(userId) },
+  });
+
+  if (!user) throw new Error("User not found");
+
+  const bcrypt = require("bcrypt");
+  const isValid = await bcrypt.compare(currentPassword, user.password);
+  if (!isValid) throw new Error("Current password is incorrect");
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: parseInt(userId) },
+    data: { password: hashedPassword },
+  });
+
+  return { success: true, message: "Password changed successfully" };
 };
 
 module.exports = {
@@ -331,4 +405,8 @@ module.exports = {
   updateMemberService,
   activateMemberService,
   deleteMemberService,
+  getMemberProfileService,
+  getMyProfileService,
+  updateMyProfileService,
+  changeMyPasswordService,
 };

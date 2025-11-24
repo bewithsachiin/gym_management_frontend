@@ -1,23 +1,28 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+/* ------------------------------------
+   SAFE HELPERS
+------------------------------------ */
+const toInt = (v) => {
+  const n = parseInt(v);
+  return Number.isNaN(n) ? null : n;
+};
+
 /* ---------------------------------------------------------
-   GET ALL GROUPS (SuperAdmin = ALL, Admin = By Branch)
+   GET ALL GROUPS (Trainer/Receptionist = Branch Only)
 ---------------------------------------------------------- */
 const getAllGroups = async (branchId = null) => {
+  console.log("📌 [SERVICE] getAllGroups | branchId =", branchId);
+
   try {
-    const where = branchId ? { branchId: parseInt(branchId) } : {};
+    const where = branchId ? { branchId: toInt(branchId) } : {};
 
     const groups = await prisma.group.findMany({
       where,
       include: {
         _count: { select: { members: true } },
-        branch: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+        branch: { select: { id: true, name: true } }
       }
     });
 
@@ -30,23 +35,23 @@ const getAllGroups = async (branchId = null) => {
       branch: group.branch
     }));
   } catch (error) {
+    console.error("❌ [SERVICE ERROR] getAllGroups:", error);
     throw new Error(`Error fetching groups: ${error.message}`);
   }
 };
 
 /* ---------------------------------------------------------
-   GET SINGLE GROUP (SuperAdmin = any, Admin = own branch)
+   GET SINGLE GROUP (Non-Admin users = Branch Lock)
 ---------------------------------------------------------- */
-const getGroupById = async (id, branchId) => {
-  try {
-    const where = {
-      id: parseInt(id)
-    };
+const getGroupById = async (id, branchId = null) => {
+  console.log("📌 [SERVICE] getGroupById | id =", id, "| branchId =", branchId);
 
-    // Only filter branch if NOT superadmin
-    if (branchId !== null) {
-      where.branchId = branchId;
-    }
+  try {
+    const groupId = toInt(id);
+    if (!groupId) throw new Error("Invalid group ID");
+
+    const where = { id: groupId };
+    if (branchId !== null) where.branchId = toInt(branchId);
 
     const group = await prisma.group.findFirst({
       where,
@@ -56,7 +61,7 @@ const getGroupById = async (id, branchId) => {
       }
     });
 
-    if (!group) throw new Error('Group not found');
+    if (!group) throw new Error("Group not found or not authorized");
 
     return {
       id: group.id,
@@ -67,20 +72,26 @@ const getGroupById = async (id, branchId) => {
       branch: group.branch
     };
   } catch (error) {
+    console.error("❌ [SERVICE ERROR] getGroupById:", error);
     throw new Error(`Error fetching group: ${error.message}`);
   }
 };
 
 /* ---------------------------------------------------------
-   CREATE GROUP
+   CREATE GROUP (Only SuperAdmin/Admin)
 ---------------------------------------------------------- */
 const createGroup = async (data, branchId) => {
+  console.log("🆕 [SERVICE] createGroup:", data);
+
   try {
+    const bId = toInt(branchId);
+    if (!bId) throw new Error("Invalid branchId");
+
     const group = await prisma.group.create({
       data: {
         name: data.name,
-        photo: data.photo && typeof data.photo === 'string' ? data.photo : null,
-        branchId: parseInt(branchId)
+        photo: data.photo && typeof data.photo === "string" ? data.photo : null,
+        branchId: bId
       },
       include: {
         _count: { select: { members: true } },
@@ -97,37 +108,36 @@ const createGroup = async (data, branchId) => {
       branch: group.branch
     };
   } catch (error) {
+    console.error("❌ [SERVICE ERROR] createGroup:", error);
     throw new Error(`Error creating group: ${error.message}`);
   }
 };
 
 /* ---------------------------------------------------------
-   UPDATE GROUP (SuperAdmin = any, Admin = own branch)
+   UPDATE GROUP (Only SuperAdmin/Admin)
 ---------------------------------------------------------- */
-const updateGroup = async (id, data, branchId) => {
+const updateGroup = async (id, data, branchId = null) => {
+  console.log("✏️ [SERVICE] updateGroup | id =", id, "| data =", data, "| branchId =", branchId);
+
   try {
-    const where = { id: parseInt(id) };
+    const groupId = toInt(id);
+    if (!groupId) throw new Error("Invalid group ID");
 
-    if (branchId !== null) {
-      where.branchId = branchId; // Only admins get branch restriction
-    }
+    const where = { id: groupId };
+    if (branchId !== null) where.branchId = toInt(branchId);
 
-    // Update with permission filter
     const updated = await prisma.group.updateMany({
       where,
       data: {
         name: data.name,
-        photo: data.photo && typeof data.photo === 'string' ? data.photo : null
+        photo: data.photo && typeof data.photo === "string" ? data.photo : null
       }
     });
 
-    if (updated.count === 0) {
-      throw new Error('Group not found or not authorized');
-    }
+    if (updated.count === 0) throw new Error("Group not found or not authorized");
 
-    // return updated group
     const group = await prisma.group.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: groupId },
       include: {
         _count: { select: { members: true } },
         branch: { select: { id: true, name: true } }
@@ -143,35 +153,39 @@ const updateGroup = async (id, data, branchId) => {
       branch: group.branch
     };
   } catch (error) {
+    console.error("❌ [SERVICE ERROR] updateGroup:", error);
     throw new Error(`Error updating group: ${error.message}`);
   }
 };
 
 /* ---------------------------------------------------------
-   DELETE GROUP (SuperAdmin = any, Admin = own branch)
+   DELETE GROUP (Only SuperAdmin/Admin)
 ---------------------------------------------------------- */
-const deleteGroup = async (id, branchId) => {
+const deleteGroup = async (id, branchId = null) => {
+  console.log("🗑️ [SERVICE] deleteGroup | id =", id, "| branchId =", branchId);
+
   try {
-    // Remove group from all users first
+    const groupId = toInt(id);
+    if (!groupId) throw new Error("Invalid group ID");
+
+    // Remove relation from users first
     await prisma.user.updateMany({
-      where: { groupId: parseInt(id) },
+      where: { groupId },
       data: { groupId: null }
     });
 
-    const where = { id: parseInt(id) };
-
-    if (branchId !== null) {
-      where.branchId = branchId;
-    }
+    const where = { id: groupId };
+    if (branchId !== null) where.branchId = toInt(branchId);
 
     const deleted = await prisma.group.deleteMany({ where });
 
     if (deleted.count === 0) {
-      throw new Error('Group not found or not authorized');
+      throw new Error("Group not found or not authorized");
     }
 
-    return { message: 'Group deleted successfully' };
+    return { message: "Group deleted successfully" };
   } catch (error) {
+    console.error("❌ [SERVICE ERROR] deleteGroup:", error);
     throw new Error(`Error deleting group: ${error.message}`);
   }
 };
