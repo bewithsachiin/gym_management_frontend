@@ -49,7 +49,7 @@ export const UserProvider = ({ children }) => {
     localStorage.setItem('userId', userData.id);
     localStorage.setItem('userName', userData.name);
     localStorage.setItem('userEmail', userData.email);
-    localStorage.setItem('userRole', userData.role.toLowerCase());
+    localStorage.setItem('userRole', userData.role ? userData.role.toLowerCase() : '');
     localStorage.setItem('branchId', userData.branchId);
 
     debugUser.success('User logged in', userData);

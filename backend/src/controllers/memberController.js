@@ -1,14 +1,22 @@
+"use strict";
+
 const bcrypt = require("bcrypt");
 const memberService = require("../services/memberService");
 
-module.exports = {
+// -----------------------------------------------------
+// SAFE NUMBER PARSER (runtime type check)
+// -----------------------------------------------------
+const toInt = (val) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : null;
+};
 
+module.exports = {
   // ----------------------------------------------------
-  // 📌 GET ALL MEMBERS
+  // GET ALL MEMBERS
   // ----------------------------------------------------
   getMembers: async (req, res) => {
     try {
-      // Use access filters from middleware
       const { userBranchId, isSuperAdmin } = req.accessFilters;
       const search = req.query.search || "";
 
@@ -21,21 +29,21 @@ module.exports = {
       return res.json({
         success: true,
         message: "Members fetched successfully",
-        data: members,
+        data: members
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 GET SINGLE MEMBER
+  // GET SINGLE MEMBER
   // ----------------------------------------------------
   getMemberById: async (req, res) => {
     try {
-      const id = req.params.id;
+      const id = toInt(req.params.id);
+      if (!id) return res.status(400).json({ success: false, message: "Invalid member ID" });
+
       const branchId = req.user.branchId;
       const isSuperAdmin = req.user.role === "superadmin";
 
@@ -46,42 +54,34 @@ module.exports = {
       );
 
       if (!member) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Member not found" });
+        return res.status(404).json({ success: false, message: "Member not found" });
       }
 
       return res.json({
         success: true,
         message: "Member fetched successfully",
-        data: member,
+        data: member
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 CREATE MEMBER
+  // CREATE MEMBER
   // ----------------------------------------------------
   createMember: async (req, res) => {
     try {
       const data = req.body;
 
-      // Add image (Cloudinary)
       if (req.file) data.photo = req.file.path;
 
-      // Hash password
       if (data.password) {
         data.password = await bcrypt.hash(data.password, 10);
       }
 
-      // Force user role to "member" (secure)
       data.role = "member";
 
-      // Set branchId from access filters for admin
       const { userRole, userBranchId } = req.accessFilters;
       if (userRole === "admin" && !data.branchId) {
         data.branchId = userBranchId;
@@ -92,39 +92,34 @@ module.exports = {
       return res.status(201).json({
         success: true,
         message: "Member created successfully",
-        data: newMember,
+        data: newMember
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 UPDATE MEMBER
+  // UPDATE MEMBER
   // ----------------------------------------------------
   updateMember: async (req, res) => {
     try {
-      const id = req.params.id;
+      const id = toInt(req.params.id);
+      if (!id) return res.status(400).json({ success: false, message: "Invalid member ID" });
+
       const data = req.body;
 
-      // Update image only if new file uploaded
-      if (req.file) {
-        data.photo = req.file.path;
-      }
+      if (req.file) data.photo = req.file.path;
 
-      // Update password (hash if sent)
       if (data.password) {
         data.password = await bcrypt.hash(data.password, 10);
       } else {
-        delete data.password; // prevent setting empty password
+        delete data.password;
       }
 
-      // Ensure branch cannot be changed for admin users
       const { userRole } = req.accessFilters;
       if (userRole === "admin") {
-        delete data.branchId; // Prevent branch changes
+        delete data.branchId;
       }
 
       const updatedMember = await memberService.updateMemberService(id, data);
@@ -132,91 +127,82 @@ module.exports = {
       return res.json({
         success: true,
         message: "Member updated successfully",
-        data: updatedMember,
+        data: updatedMember
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 ACTIVATE / DEACTIVATE MEMBER
+  // ACTIVATE/DEACTIVATE MEMBER
   // ----------------------------------------------------
   activateMember: async (req, res) => {
     try {
-      const id = req.params.id;
+      const id = toInt(req.params.id);
+      if (!id) return res.status(400).json({ success: false, message: "Invalid member ID" });
 
       const updated = await memberService.activateMemberService(id);
 
-      if (!updated)
-        return res.status(404).json({
-          success: false,
-          message: "Member not found",
-        });
+      if (!updated) {
+        return res.status(404).json({ success: false, message: "Member not found" });
+      }
 
       return res.json({
         success: true,
         message: "Member activation status updated",
-        data: updated,
+        data: updated
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 DELETE MEMBER
+  // DELETE MEMBER
   // ----------------------------------------------------
   deleteMember: async (req, res) => {
     try {
-      const id = req.params.id;
+      const id = toInt(req.params.id);
+      if (!id) return res.status(400).json({ success: false, message: "Invalid member ID" });
 
       await memberService.deleteMemberService(id);
 
       return res.json({
         success: true,
-        message: "Member deleted successfully",
+        message: "Member deleted successfully"
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 GET MEMBER PROFILE
+  // GET MEMBER PROFILE (Admin/Trainer/Receptionist)
   // ----------------------------------------------------
   getMemberProfile: async (req, res) => {
     try {
-      const id = req.params.id;
+      const id = toInt(req.params.id);
+      if (!id) return res.status(400).json({ success: false, message: "Invalid member ID" });
 
       const member = await memberService.getMemberProfileService(id);
 
       if (!member) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Member not found" });
+        return res.status(404).json({ success: false, message: "Member not found" });
       }
 
       return res.json({
         success: true,
         message: "Member profile fetched successfully",
-        data: member,
+        data: member
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 GET MY PROFILE (for member self-service)
+  // GET MY PROFILE (Self service)
   // ----------------------------------------------------
   getMyProfile: async (req, res) => {
     try {
@@ -225,32 +211,27 @@ module.exports = {
       const member = await memberService.getMyProfileService(userId);
 
       if (!member) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Member not found" });
+        return res.status(404).json({ success: false, message: "Member not found" });
       }
 
       return res.json({
         success: true,
         message: "Member profile fetched successfully",
-        data: member,
+        data: member
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 UPDATE MY PROFILE (for member self-service)
+  // UPDATE MY PROFILE (Self service)
   // ----------------------------------------------------
   updateMyProfile: async (req, res) => {
     try {
       const userId = req.user.id;
       const data = req.body;
 
-      // Update image only if new file uploaded
       if (req.file) {
         data.profile_picture = req.file.path;
       }
@@ -260,32 +241,106 @@ module.exports = {
       return res.json({
         success: true,
         message: "Member profile updated successfully",
-        data: updatedMember,
+        data: updatedMember
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
 
-
   // ----------------------------------------------------
-  // 📌 CHANGE MY PASSWORD (for member self-service)
+  // CHANGE MY PASSWORD (Self service)
   // ----------------------------------------------------
   changeMyPassword: async (req, res) => {
     try {
       const userId = req.user.id;
       const { currentPassword, newPassword } = req.body;
 
-      const result = await memberService.changeMyPasswordService(userId, currentPassword, newPassword);
+      const result = await memberService.changeMyPasswordService(
+        userId,
+        currentPassword,
+        newPassword
+      );
 
       return res.json({
         success: true,
-        message: result.message,
+        message: result.message
       });
-
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
     }
   },
+
+  // ----------------------------------------------------
+  // GET BRANCH PLANS (Self service)
+  // ----------------------------------------------------
+  getPlans: async (req, res) => {
+    try {
+      const branchId = req.user.branchId;
+      const type = req.query.type;
+
+      const plans = await memberService.getBranchPlansService(branchId, type);
+
+      return res.json({
+        success: true,
+        message: "Plans fetched successfully",
+        data: plans
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ----------------------------------------------------
+  // CREATE BOOKING (Self service)
+  // ----------------------------------------------------
+  createBooking: async (req, res) => {
+    try {
+      const memberId = req.user.id;
+      const branchId = req.user.branchId;
+      const { planId, paymentDetails } = req.body;
+
+      if (!planId || !paymentDetails || !paymentDetails.upi) {
+        return res.status(400).json({
+          success: false,
+          message: "Plan ID and UPI details are required"
+        });
+      }
+
+      const result = await memberService.createBookingService(
+        memberId,
+        branchId,
+        planId,
+        paymentDetails
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Booking created successfully",
+        data: result
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ----------------------------------------------------
+  // GET MEMBER BOOKINGS (Self service)
+  // ----------------------------------------------------
+  getBookings: async (req, res) => {
+    try {
+      const memberId = req.user.id;
+      const branchId = req.user.branchId;
+
+      const bookings = await memberService.getMemberBookingsService(memberId, branchId);
+
+      return res.json({
+        success: true,
+        message: "Bookings fetched successfully",
+        data: bookings
+      });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
 };

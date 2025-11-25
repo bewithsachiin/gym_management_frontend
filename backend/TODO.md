@@ -1,28 +1,20 @@
-# Seed File Update Tasks
+# Fix PrismaClientValidationError for Staff Creation/Update
 
-## Completed Tasks
-- [x] Analyze current seed.js and identify missing models
-- [x] Create comprehensive plan for updating seed file
-- [x] Get user approval for the plan
+## Issue
+- User model requires `password` as `String` (not optional)
+- When `loginEnabled` is false, `hashedPassword` is set to `null`
+- This causes `PrismaClientValidationError` in `prisma.user.create()` and `prisma.user.update()`
 
-## Pending Tasks
-- [ ] Add seeding for StaffRole (create roles like 'Trainer', 'Receptionist', 'Housekeeping')
-- [ ] Add seeding for Staff (link to existing users and roles)
-- [ ] Add seeding for Plan (global membership plans)
-- [ ] Add seeding for BranchPlan (branch-specific plans)
-- [ ] Add seeding for Group (gym groups with members)
-- [ ] Add seeding for WalkIn (visitor registrations)
-- [ ] Add seeding for DutyRoster (staff shift schedules)
-- [ ] Add seeding for Salary (staff salary records)
-- [ ] Add seeding for MemberAttendance (member check-ins)
-- [ ] Add seeding for MemberFeedback (feedback entries)
-- [ ] Add seeding for GeneralTrainerDashboard (dashboard metrics)
-- [ ] Add seeding for ReceptionistBooking (booking records)
-- [ ] Add seeding for Payment (payment transactions)
-- [ ] Add seeding for GroupClassBooking (class bookings)
-- [ ] Add seeding for BranchSettings (branch configurations)
-- [ ] Add seeding for AuditLog (action logs)
-- [ ] Add seeding for QRCheck (QR code entries)
-- [ ] Add seeding for Attendance (staff attendance)
-- [ ] Enhance existing seeding with more data and proper relations
-- [ ] Test the updated seed file
+## Plan
+1. Modify password handling in `createStaff` to always provide a hashed password
+   - If `loginEnabled` is true and password provided: hash the provided password
+   - If `loginEnabled` is true but no password: throw error (require password for login)
+   - If `loginEnabled` is false: hash a dummy password (e.g., "dummy123")
+
+2. Modify password handling in `updateStaff` similarly
+   - Ensure password is never set to null in User update
+
+3. Test the fix by running the staff creation endpoint
+
+## Files to Edit
+- `src/services/staffService.js`

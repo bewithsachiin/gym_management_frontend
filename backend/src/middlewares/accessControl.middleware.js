@@ -1,182 +1,178 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-/**
- * Centralized Access Control Middleware
- * Applies global role-based and branch-based filtering to all data operations
- * Ensures users can only access data they are authorized to see
- */
+// ROLE + BRANCH ACCESS CONTROL
 const accessControl = (options = {}) => {
   return async (req, res, next) => {
     try {
       const user = req.user;
+
       if (!user) {
-        return res.status(401).json({ success: false, message: 'User not authenticated' });
+        return res.status(401).json({ success: false, message: "User not authenticated" });
       }
 
-      const { role, branchId: rawBranchId, id: userId } = user;
-      const branchId = rawBranchId ? parseInt(rawBranchId) : null;
+      const role = user.role;
+      const userId = user.id;
+      const branchId = user.branchId ? parseInt(user.branchId) : null;
 
-      // Debug logging
-      console.log(`🔐 Access Control - User: ${userId}, Role: ${role}, Branch: ${branchId || 'N/A'}`);
-
-      // Store access filters in req for use in controllers/services
+      // Save basic access properties for use in service/controller
       req.accessFilters = {
         userRole: role,
         userBranchId: branchId,
-        userId: userId,
-        isSuperAdmin: role === 'superadmin',
-        isAdmin: role === 'admin',
-        isTrainer: ['generaltrainer', 'personaltrainer'].includes(role),
-        isStaff: ['housekeeping', 'receptionist'].includes(role),
-        isMember: role === 'member'
+        userId,
+        isSuperAdmin: role === "superadmin",
+        isAdmin: role === "admin",
+        isTrainer: role === "generaltrainer" || role === "personaltrainer",
+        isStaff: ["housekeeping", "receptionist"].includes(role),
+        isMember: role === "member",
       };
 
-      // Apply global query filters based on role
+      // Default filters
       req.queryFilters = {};
 
-      if (role === 'superadmin') {
-        // SuperAdmin: No restrictions - can see everything
-        console.log('🔓 SuperAdmin access - No filters applied');
-        req.queryFilters = {};
-      } else if (role === 'admin') {
-        // Admin: Can only see data from their branch
+      // ROLE RULES
+      if (role === "superadmin") {
+        req.queryFilters = {}; // no restriction
+      } 
+      else if (role === "admin") {
         if (!branchId) {
-          return res.status(403).json({ success: false, message: 'Admin must be assigned to a branch' });
+          return res.status(403).json({ success: false, message: "Admin must be assigned to a branch" });
         }
         req.queryFilters.branchId = branchId;
-        console.log(`🏢 Admin access - Filtered to branch: ${branchId}`);
-      } else {
-        // Other roles: Can only see their own data and branch-related data
+      } 
+      else {
         if (!branchId) {
-          return res.status(403).json({ success: false, message: 'User must be assigned to a branch' });
+          return res.status(403).json({ success: false, message: "User must be assigned to a branch" });
         }
-
-        // For most operations, filter by branch
         req.queryFilters.branchId = branchId;
 
-        // For user-specific data, also filter by userId
         if (options.includeUserFilter) {
           req.queryFilters.userId = userId;
         }
-
-        console.log(`👤 ${role} access - Filtered to branch: ${branchId}, user: ${userId}`);
       }
 
-      // Validate branch access for operations that specify a branch
-      if (req.params.branchId || req.body.branchId || req.query.branchId) {
-        const requestedBranchId = req.params.branchId || req.body.branchId || req.query.branchId;
+      // BRANCH VALIDATION IN REQUEST
+      const requestedBranch =
+        req.params.branchId || req.body.branchId || req.query.branchId;
 
-        if (role !== 'superadmin' && requestedBranchId != branchId) {
-          console.log(`🚫 Access denied - User branch: ${branchId}, Requested branch: ${requestedBranchId}`);
-          return res.status(403).json({ success: false, message: 'Access denied: Branch isolation enforced' });
-        }
-      }
-
-      // Validate user access for operations on specific users (only for user-related endpoints)
-      if ((req.params.id || req.body.userId || req.query.userId) && req.originalUrl.includes('/members')) {
-        const targetUserId = req.params.id || req.body.userId || req.query.userId;
-
-        // Allow access to own data
-        if (targetUserId == userId) {
-          console.log(`✅ User accessing own data: ${userId}`);
-        } else if (role === 'superadmin') {
-          console.log(`✅ SuperAdmin accessing user data: ${targetUserId}`);
-        } else if (role === 'admin' && branchId) {
-          // Admin can access users in their branch
-          const targetUser = await prisma.user.findUnique({
-            where: { id: parseInt(targetUserId) },
-            select: { branchId: true }
+      if (requestedBranch && role !== "superadmin") {
+        if (parseInt(requestedBranch) !== branchId) {
+          return res.status(403).json({
+            success: false,
+            message: "Access denied: Branch isolation enforced",
           });
-
-          if (!targetUser || targetUser.branchId != branchId) {
-            console.log(`🚫 Admin access denied - Target user branch: ${targetUser?.branchId}, Admin branch: ${branchId}`);
-            return res.status(403).json({ success: false, message: 'Access denied: Can only manage users in your branch' });
-          }
-          console.log(`✅ Admin accessing branch user data: ${targetUserId}`);
-        } else {
-          console.log(`🚫 Access denied - User ${userId} trying to access user ${targetUserId}`);
-          return res.status(403).json({ success: false, message: 'Access denied: Can only access your own data' });
         }
       }
 
-      console.log(`✅ Access granted - Applied filters:`, req.queryFilters);
-      next();
+      // MEMBER-LEVEL ACCESS VALIDATION (only for /members routes)
+      const requestedUser =
+        req.params.id || req.body.userId || req.query.userId;
 
+      const isMemberRoute =
+        req.originalUrl.includes("/members") &&
+        !req.originalUrl.includes("/members/group-classes");
+
+      if (requestedUser && isMemberRoute) {
+        const targetId = parseInt(requestedUser);
+
+        // User accessing own data is allowed
+        if (targetId === userId) return next();
+
+        // Superadmin allowed
+        if (role === "superadmin") return next();
+
+        // Admin: Only user from same branch
+        if (role === "admin" && branchId) {
+          try {
+            const result = await prisma.user.findUnique({
+              where: { id: targetId },
+              select: { branchId: true },
+            });
+
+            if (!result || result.branchId !== branchId) {
+              return res.status(403).json({
+                success: false,
+                message: "Access denied: Can only manage users in your branch",
+              });
+            }
+            return next();
+          } catch (err) {
+            return res.status(500).json({ success: false, message: "Access control error" });
+          }
+        }
+
+        // All others denied
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Can only access your own data",
+        });
+      }
+
+      return next();
     } catch (error) {
-      console.error('❌ Access Control Error:', error);
-      return res.status(500).json({ success: false, message: 'Access control error' });
+      return res.status(500).json({ success: false, message: "Access control error" });
     }
   };
 };
 
-/**
- * Permission checker for specific actions
- */
-const checkPermission = (requiredRoles = [], requiredPermissions = [], options = {}) => {
+// CHECK SPECIFIC ROLE OR PERMISSIONS
+const checkPermission = (roles = [], permissions = [], options = {}) => {
   return async (req, res, next) => {
-    const userRole = req.accessFilters?.userRole;
-    const userId = req.accessFilters?.userId;
-
-    if (!userRole) {
-      return res.status(401).json({ success: false, message: 'Access filters not set' });
+    const access = req.accessFilters;
+    if (!access || !access.userRole) {
+      return res.status(401).json({ success: false, message: "Access filters not set" });
     }
 
-    // SuperAdmin has all permissions
-    if (userRole === 'superadmin') {
-      console.log(`✅ SuperAdmin permission granted for action`);
-      return next();
+    const userRole = access.userRole;
+    const userId = access.userId;
+
+    // SuperAdmin allowed always
+    if (userRole === "superadmin") return next();
+
+    // Static Role Check
+    if (roles.length > 0 && !roles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions for this action",
+      });
     }
 
-    // Check if user role is in required roles
-    if (requiredRoles.length > 0 && !requiredRoles.includes(userRole)) {
-      console.log(`🚫 Permission denied - Required roles: ${requiredRoles.join(', ')}, User: ${userRole}`);
-      return res.status(403).json({ success: false, message: 'Insufficient permissions for this action' });
-    }
+    // Dynamic Staff Permission Check
+    const staffRoles = ["generaltrainer", "personaltrainer", "housekeeping", "receptionist"];
+    const isStaff = staffRoles.includes(userRole);
 
-    // For staff roles, check dynamic permissions
-    if (requiredPermissions.length > 0 && ['generaltrainer', 'personaltrainer', 'housekeeping', 'receptionist'].includes(userRole)) {
+    if (permissions.length > 0 && isStaff) {
       try {
-        // Get user's staff role permissions
-        const { PrismaClient } = require('@prisma/client');
-        const prisma = new PrismaClient();
-
         const staff = await prisma.staff.findFirst({
-          where: { userId: userId },
-          include: { role: true }
+          where: { userId },
+          include: { role: true },
         });
 
-        if (!staff || !staff.role) {
-          console.log(`🚫 No staff role found for user: ${userId}`);
-          return res.status(403).json({ success: false, message: 'Staff role not found' });
+        if (!staff || !staff.role || !Array.isArray(staff.role.permissions)) {
+          return res.status(403).json({ success: false, message: "Staff role not found" });
         }
 
-        const userPermissions = staff.role.permissions || [];
-        const hasRequiredPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+        const userPermissions = staff.role.permissions;
+        const hasPermission = permissions.some((perm) => userPermissions.includes(perm));
 
-        if (!hasRequiredPermission) {
-          console.log(`🚫 Permission denied - Required permissions: ${requiredPermissions.join(', ')}, User permissions: ${userPermissions.join(', ')}`);
-          return res.status(403).json({ success: false, message: 'Insufficient permissions for this action' });
+        if (!hasPermission) {
+          return res.status(403).json({
+            success: false,
+            message: "Insufficient permissions for this action",
+          });
         }
 
-        console.log(`✅ Staff permission granted - Permissions: ${userPermissions.join(', ')}`);
+        return next();
       } catch (error) {
-        console.error('Error checking staff permissions:', error);
-        return res.status(500).json({ success: false, message: 'Permission check error' });
+        return res.status(500).json({ success: false, message: "Permission check error" });
       }
     }
 
-    // Additional checks for branch operations
-    if (options.requireBranch && !req.accessFilters?.userBranchId) {
-      return res.status(403).json({ success: false, message: 'Branch assignment required for this action' });
-    }
-
-    console.log(`✅ Permission granted - Role: ${userRole}, Action allowed`);
-    next();
+    return next();
   };
 };
 
 module.exports = {
   accessControl,
-  checkPermission
+  checkPermission,
 };

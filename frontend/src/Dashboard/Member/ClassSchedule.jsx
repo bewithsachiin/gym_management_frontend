@@ -1,52 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { FaClock, FaUser, FaCalendarAlt, FaRupeeSign } from 'react-icons/fa';
+import axiosInstance from '../../utils/axiosInstance';
 
 const ClassSchedule = () => {
-  // Mock data for trainers
-  const trainers = [
-    { id: 1, name: 'John Smith', specialty: 'Strength Training' },
-    { id: 2, name: 'Sarah Johnson', specialty: 'Yoga & Pilates' },
-    { id: 3, name: 'Mike Williams', specialty: 'Cardio & HIIT' },
-    { id: 4, name: 'Emily Davis', specialty: 'Weight Loss' },
-  ];
-  
   // State for group classes
   const [groupClasses, setGroupClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
-  // Initialize classes
+  // Fetch weekly classes
   useEffect(() => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - dayOfWeek);
-    
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      dates.push(date.toISOString().split('T')[0]);
-    }
-
-    const mockClasses = [
-      { id: 1, name: 'Aerobics Class', trainer_id: 4, date: dates[0], start_time: '05:15', end_time: '06:15', capacity: 20, booked_seats: 12, price: 300 },
-      { id: 2, name: 'HIT Class', trainer_id: 3, date: dates[0], start_time: '07:30', end_time: '08:45', capacity: 15, booked_seats: 10, price: 400 },
-      { id: 3, name: 'Yoga Class', trainer_id: 2, date: dates[1], start_time: '08:00', end_time: '10:00', capacity: 18, booked_seats: 15, price: 350 },
-      { id: 4, name: 'Pilates', trainer_id: 2, date: dates[1], start_time: '12:00', end_time: '15:15', capacity: 12, booked_seats: 8, price: 450 },
-      { id: 5, name: 'Yoga Class', trainer_id: 2, date: dates[2], start_time: '08:00', end_time: '10:00', capacity: 18, booked_seats: 14, price: 350 },
-      { id: 6, name: 'Pilates', trainer_id: 2, date: dates[2], start_time: '12:00', end_time: '15:15', capacity: 12, booked_seats: 9, price: 450 },
-      { id: 7, name: 'Yoga Class', trainer_id: 2, date: dates[3], start_time: '08:00', end_time: '10:00', capacity: 18, booked_seats: 16, price: 350 },
-      { id: 8, name: 'Pilates', trainer_id: 2, date: dates[3], start_time: '12:00', end_time: '15:15', capacity: 12, booked_seats: 10, price: 450 },
-      { id: 9, name: 'Yoga Class', trainer_id: 2, date: dates[4], start_time: '08:00', end_time: '10:00', capacity: 18, booked_seats: 13, price: 350 },
-      { id: 10, name: 'Pilates', trainer_id: 2, date: dates[4], start_time: '12:00', end_time: '15:15', capacity: 12, booked_seats: 7, price: 450 },
-      { id: 11, name: 'Yoga Class', trainer_id: 2, date: dates[5], start_time: '08:00', end_time: '10:00', capacity: 18, booked_seats: 17, price: 350 },
-      { id: 12, name: 'Pilates', trainer_id: 2, date: dates[5], start_time: '12:00', end_time: '15:15', capacity: 12, booked_seats: 11, price: 450 },
-      { id: 13, name: 'HIT Class', trainer_id: 3, date: dates[6], start_time: '07:30', end_time: '08:45', capacity: 15, booked_seats: 12, price: 400 },
-      { id: 14, name: 'Zumba Class', trainer_id: 4, date: dates[6], start_time: '08:30', end_time: '10:30', capacity: 25, booked_seats: 20, price: 250 },
-    ];
-    setGroupClasses(mockClasses);
+    const fetchClasses = async () => {
+      try {
+        setLoading(true);
+        const response = await axiosInstance.get('/members/group-classes');
+        setGroupClasses(response.data.data.classes);
+      } catch (err) {
+        setError(err.message || 'Failed to fetch classes');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClasses();
   }, []);
 
   // Helper functions
@@ -67,8 +46,8 @@ const ClassSchedule = () => {
     }).format(price);
   };
 
-  const getTrainer = (trainerId) => {
-    return trainers.find(t => t.id === trainerId) || { name: 'Unknown', specialty: '' };
+  const getTrainer = (cls) => {
+    return cls.trainer || { name: 'Unknown', specialty: '' };
   };
 
   const formatDate = (dateString) => {
@@ -87,6 +66,29 @@ const ClassSchedule = () => {
     setSelectedClass(null);
   };
 
+  // Booking handler
+  const handleBooking = async () => {
+    if (!selectedClass) return;
+    try {
+      setBookingLoading(true);
+      await axiosInstance.post(`/members/group-classes/${selectedClass.id}/book`);
+      // Update booked seats locally
+      setGroupClasses(prev =>
+        prev.map(cls =>
+          cls.id === selectedClass.id
+            ? { ...cls, booked_seats: cls.booked_seats + 1 }
+            : cls
+        )
+      );
+      alert(`Successfully booked ${selectedClass.name}!`);
+      closeBookingModal();
+    } catch (err) {
+      alert(err.message || 'Booking failed');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   // Prevent background scroll when modal open
   useEffect(() => {
     if (isModalOpen) {
@@ -98,6 +100,24 @@ const ClassSchedule = () => {
       document.body.style.overflow = 'unset';
     };
   }, [isModalOpen]);
+
+  if (loading) {
+    return (
+      <div className="mt-3 text-center" style={{ backgroundColor: '#f8f9fa' }}>
+        <h1 className="fw-bold">Weekly Class Schedule</h1>
+        <p>Loading classes...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mt-3 text-center" style={{ backgroundColor: '#f8f9fa' }}>
+        <h1 className="fw-bold">Weekly Class Schedule</h1>
+        <p className="text-danger">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-3" style={{ backgroundColor: '#f8f9fa' }}>
@@ -112,7 +132,7 @@ const ClassSchedule = () => {
       {/* Classes Grid */}
       <div className="row g-4">
         {groupClasses.map(cls => {
-          const trainer = getTrainer(cls.trainer_id);
+          const trainer = getTrainer(cls);
           const isFull = cls.booked_seats >= cls.capacity;
 
           return (
@@ -270,12 +290,10 @@ const ClassSchedule = () => {
                           border: 'none',
                           fontSize: '1.1rem'
                         }}
-                        onClick={() => {
-                          alert(`Successfully booked ${selectedClass.name} for ${formatPrice(selectedClass.price)}!`);
-                          closeBookingModal();
-                        }}
+                        onClick={handleBooking}
+                        disabled={bookingLoading}
                       >
-                        Confirm Booking
+                        {bookingLoading ? 'Booking...' : 'Confirm Booking'}
                       </button>
                     </div>
                   </div>

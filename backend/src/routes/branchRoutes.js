@@ -1,72 +1,50 @@
-const express = require('express');
+"use strict";
+
+const express = require("express");
 const router = express.Router();
 
 // Controllers
-const branchController = require('../controllers/branchController');
+const branchController = require("../controllers/branchController");
 
 // Middlewares
-const uploadMiddleware = require('../middlewares/uploadMiddleware');
-const { authenticateToken } = require('../middlewares/auth.middleware');
-const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
+const { branchUpload } = require("../middlewares/uploadMiddleware");
+const { authenticateToken } = require("../middlewares/auth.middleware");
+const { accessControl, checkPermission } = require("../middlewares/accessControl.middleware");
 
-// ----------------------------------------
-// Common Middleware Groups (DEBUG FRIENDLY)
-// ----------------------------------------
+// ----------------------------------------------------
+// SAFE MIDDLEWARE GROUPS (No business logic changes)
+// ----------------------------------------------------
 
-console.log("🔐 [Routes] Initializing Branch Route Middlewares...");
-
-// Authenticated + Role + Branch Scoped Users
+// Authenticated users with branch-based restrictions
 const protect = [
-  (req, res, next) => { console.log("🔑 [Middleware] authenticateToken → protect"); next(); },
   authenticateToken,
-  (req, res, next) => { console.log("🛂 [Middleware] accessControl() → protect"); next(); },
   accessControl()
 ];
 
-// SuperAdmin/ Admin Only Section
+// Superadmin + Admin only access
 const superAdminOnly = [
-  (req, res, next) => { console.log("👑 [Middleware] authenticateToken → superAdminOnly"); next(); },
   authenticateToken,
-  (req, res, next) => { console.log("🛂 [Middleware] accessControl() → superAdminOnly"); next(); },
   accessControl(),
-  (req, res, next) => { console.log("🎟️ [Middleware] checkPermission(['superadmin','admin'])"); next(); },
-  checkPermission(['superadmin', 'admin'])
+  checkPermission(["superadmin", "admin"])
 ];
 
-// ----------------------------------------
-// Branch Routes (DEBUG LOGS)
-// ----------------------------------------
+// ----------------------------------------------------
+// BRANCH ROUTES (Strict + Minimal)
+// ----------------------------------------------------
 
-// Get all branches
-router.get('/', protect, (req, res, next) => {
-  console.log("📌 [Route] GET /api/v1/branches");
-  return branchController.getBranches(req, res, next);
-});
+// Fetch all branches
+router.get("/", protect, branchController.getBranches);
 
-// Get available admins (superadmin only)
-router.get('/available-admins', superAdminOnly, (req, res, next) => {
-  console.log("📌 [Route] GET /api/v1/branches/available-admins");
-  return branchController.getAvailableAdmins(req, res, next);
-});
+// Fetch admins who can be assigned to a branch
+router.get("/available-admins", superAdminOnly, branchController.getAvailableAdmins);
 
-// Create a branch (superadmin only)
-router.post('/', superAdminOnly, uploadMiddleware, (req, res, next) => {
-  console.log("📌 [Route] POST /api/v1/branches → Create Branch");
-  console.log("🖼️ Upload Middleware Applied");
-  return branchController.createBranch(req, res, next);
-});
+// Create new branch (image allowed)
+router.post("/", superAdminOnly, branchUpload, branchController.createBranch);
 
-// Update branch info (superadmin only)
-router.put('/:id', superAdminOnly, uploadMiddleware, (req, res, next) => {
-  console.log(`📌 [Route] PUT /api/v1/branches/${req.params.id} → Update Branch`);
-  console.log("🖼️ Upload Middleware Applied");
-  return branchController.updateBranch(req, res, next);
-});
+// Update existing branch (image allowed)
+router.put("/:id", superAdminOnly, branchUpload, branchController.updateBranch);
 
-// Delete branch (superadmin only)
-router.delete('/:id', superAdminOnly, (req, res, next) => {
-  console.log(`📌 [Route] DELETE /api/v1/branches/${req.params.id}`);
-  return branchController.deleteBranch(req, res, next);
-});
+// Delete branch
+router.delete("/:id", superAdminOnly, branchController.deleteBranch);
 
 module.exports = router;

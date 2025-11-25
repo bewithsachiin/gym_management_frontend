@@ -1,34 +1,35 @@
+"use strict";
+
 const prisma = require("../config/db");
 const responseHandler = require("../utils/responseHandler");
 
-// ======================================================================
-// 🔥 GET ALL BOOKINGS (Branch-based + Role-based Access)
-// ======================================================================
-exports.getAllBookings = async (req, res, next) => {
-  console.log("\n======================== PT: getAllBookings ========================");
-  console.log("👤 User:", req.user);
-  console.log("🔐 accessFilters:", req.accessFilters);
-  console.log("🔎 Query:", req.query);
+// -------------------------------------------------------
+// SAFE PARSERS (never throw / strongly typed)
+// -------------------------------------------------------
+const toInt = (val) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : null;
+};
 
+const toDate = (val) => {
+  const parsed = val ? new Date(val) : null;
+  return parsed && !isNaN(parsed.valueOf()) ? parsed : null;
+};
+
+// -------------------------------------------------------
+// GET ALL BOOKINGS
+// Branch-restricted + Role-based
+// -------------------------------------------------------
+const getAllBookings = async (req, res, next) => {
   try {
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
+    const filters = {};
 
-    const where = {};
-
-    // 🟦 Branch Access
-    if (!isSuperAdmin) {
-      where.branchId = userBranchId;
-    }
-
-    // Members should ONLY see their own bookings
-    if (userRole === "member") {
-      where.memberId = req.user.id;
-    }
-
-    console.log("📌 Final WHERE for getAllBookings:", where);
+    if (!isSuperAdmin) filters.branchId = userBranchId;
+    if (userRole === "member") filters.memberId = req.user?.id;
 
     const sessions = await prisma.personalTrainingSession.findMany({
-      where,
+      where: filters,
       include: {
         trainer: { select: { id: true, firstName: true, lastName: true } },
         member: { select: { id: true, firstName: true, lastName: true, memberId: true } },
@@ -38,338 +39,179 @@ exports.getAllBookings = async (req, res, next) => {
       orderBy: { createdAt: "desc" }
     });
 
-    console.log(`✅ PT:getAllBookings → fetched ${sessions.length} sessions`);
-
-    responseHandler.success(res, "Sessions fetched successfully", { sessions });
-
-  } catch (error) {
-    console.error("❌ PT:getAllBookings Error:", error);
-    next(error);
+    return responseHandler.success(res, "Sessions fetched successfully", { sessions });
+  } catch (err) {
+    return next(err);
   }
 };
 
-// ======================================================================
-// 🔥 GET BOOKING BY ID (Role protection)
-// ======================================================================
-exports.getBookingById = async (req, res, next) => {
-  console.log("\n======================== PT: getBookingById ========================");
-  console.log("👤 User:", req.user);
-  console.log("🔐 accessFilters:", req.accessFilters);
-  console.log("📎 Params:", req.params);
-
+// -------------------------------------------------------
+// GET BOOKING BY ID
+// Protects access for member + trainer + branch
+// -------------------------------------------------------
+const getBookingById = async (req, res, next) => {
   try {
+    const id = toInt(req.params.id);
+    if (!id) return next(new Error("Invalid booking ID"));
+
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
-    const id = parseInt(req.params.id);
-
-    if (isNaN(id)) {
-      console.warn("⚠️ PT:getBookingById → Invalid ID:", req.params.id);
-      return next(new Error("Invalid booking ID"));
-    }
-
     const session = await prisma.personalTrainingSession.findUnique({
       where: { id },
-      include: {
-        trainer: true,
-        member: true,
-        branch: true,
-        createdBy: true,
-      }
+      include: { trainer: true, member: true, branch: true, createdBy: true }
     });
 
-    console.log("📌 Fetched Session:", session ? { id: session.id, trainerId: session.trainerId, memberId: session.memberId, branchId: session.branchId } : null);
-
     if (!session) return next(new Error("Booking not found"));
-
-    // 🔐 Member: Only view their own bookings
-    if (userRole === "member" && session.memberId !== req.user.id) {
-      console.warn("⛔ PT:getBookingById → Member tried to access another member's booking");
+    if (userRole === "member" && session.memberId !== req.user.id)
       return next(new Error("Access denied"));
-    }
-
-    // 🔐 Branch Protection
-    if (!isSuperAdmin && session.branchId !== userBranchId) {
-      console.warn("⛔ PT:getBookingById → Cross-branch access blocked");
+    if (!isSuperAdmin && session.branchId !== userBranchId)
       return next(new Error("Access denied"));
-    }
 
-    responseHandler.success(res, "Session fetched successfully", { session });
-
-  } catch (error) {
-    console.error("❌ PT:getBookingById Error:", error);
-    next(error);
+    return responseHandler.success(res, "Session fetched successfully", { session });
+  } catch (err) {
+    return next(err);
   }
 };
 
-// ======================================================================
-// 🔥 CREATE BOOKING (Admin, Superadmin, Trainer)
-// ======================================================================
-exports.createBooking = async (req, res, next) => {
-  console.log("\n======================== PT: createBooking ========================");
-  console.log("👤 User:", req.user);
-  console.log("🔐 accessFilters:", req.accessFilters);
-  console.log("📦 Body:", req.body);
-
+// -------------------------------------------------------
+// CREATE BOOKING
+// Allowed: Admin, Superadmin, Trainer
+// -------------------------------------------------------
+const createBooking = async (req, res, next) => {
   try {
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
+    const { trainerId, memberId, branchId, date, time, type, notes, location, price, paymentStatus } = req.body;
 
-    const {
-      trainerId,
-      memberId,
-      branchId,
-      date,
-      time,
-      type,
-      notes,
-      location,
-      price,
-      paymentStatus,
-    } = req.body;
-
-    // 🟦 Validate Required Fields
-    if (!trainerId || !memberId || !date || !time) {
-      console.warn("⚠️ PT:createBooking → Missing required fields");
+    // Required fields validation
+    if (!trainerId || !memberId || !date || !time)
       return next(new Error("Trainer, member, date & time are required"));
-    }
 
-    // 🟦 Final Branch Logic
-    const finalBranchId = isSuperAdmin ? parseInt(branchId) : userBranchId;
-    console.log("🏢 finalBranchId:", finalBranchId);
+    // Branch resolution based on role
+    const finalBranchId = isSuperAdmin ? toInt(branchId) : userBranchId;
+    if (!finalBranchId) return next(new Error("Branch ID missing"));
 
-    if (!finalBranchId) {
-      console.warn("⚠️ PT:createBooking → finalBranchId missing");
-      return next(new Error("Branch ID missing"));
-    }
-
-    // 🟦 Validate Trainer
-    const trainer = await prisma.user.findUnique({ where: { id: parseInt(trainerId) } });
-    console.log("👨‍🏫 Trainer Lookup:", trainer ? { id: trainer.id, branchId: trainer.branchId } : null);
-
-    if (!trainer || trainer.branchId !== finalBranchId) {
-      console.warn("⛔ PT:createBooking → Trainer not in branch");
+    // Trainer and member validation + must belong to same branch
+    const trainer = await prisma.user.findUnique({ where: { id: toInt(trainerId) } });
+    if (!trainer || trainer.branchId !== finalBranchId)
       return next(new Error("Trainer does not belong to this branch"));
-    }
 
-    // 🟦 Validate Member
-    const member = await prisma.user.findUnique({ where: { id: parseInt(memberId) } });
-    console.log("🧍 Member Lookup:", member ? { id: member.id, branchId: member.branchId } : null);
-
-    if (!member || member.branchId !== finalBranchId) {
-      console.warn("⛔ PT:createBooking → Member not in branch");
+    const member = await prisma.user.findUnique({ where: { id: toInt(memberId) } });
+    if (!member || member.branchId !== finalBranchId)
       return next(new Error("Member does not belong to this branch"));
-    }
 
-    // 🟥 Trainer session conflict check
-    console.log("🔄 Checking trainer conflict for:", {
-      trainerId: Number(trainerId),
-      date,
-      time,
-      finalBranchId,
-    });
-
+    // Check if trainer has another booking at same date/time
     const conflict = await prisma.personalTrainingSession.findFirst({
       where: {
-        trainerId: Number(trainerId),
-        date: new Date(date),
+        trainerId: toInt(trainerId),
+        date: toDate(date),
         time,
         branchId: finalBranchId,
         status: { not: "Cancelled" }
       }
     });
 
-    if (conflict) {
-      console.warn("⛔ PT:createBooking → Trainer conflict found:", {
-        conflictId: conflict.id,
-        date: conflict.date,
-        time: conflict.time
-      });
-      return next(new Error("Trainer already has a booking at this date & time"));
-    }
+    if (conflict) return next(new Error("Trainer already has a booking at this date & time"));
 
-    // 🔥 Create booking
+    // Create booking
     const session = await prisma.personalTrainingSession.create({
       data: {
-        trainerId: parseInt(trainerId),
-        memberId: parseInt(memberId),
+        trainerId: toInt(trainerId),
+        memberId: toInt(memberId),
         branchId: finalBranchId,
-        date: new Date(date),
+        date: toDate(date),
         time,
         type: type || "Personal Training",
         notes: notes || "",
         location: location || "Gym Floor",
-        price: price ? parseInt(price) : 0,
+        price: price ? toInt(price) : 0,
         paymentStatus: paymentStatus || "Paid",
         status: "Booked",
-        createdById: req.user.id,
+        createdById: req.user.id
       }
     });
 
-    console.log("✅ PT:createBooking → Created session:", {
-      id: session.id,
-      trainerId: session.trainerId,
-      memberId: session.memberId,
-      branchId: session.branchId,
-      date: session.date,
-      time: session.time
-    });
-
-    responseHandler.success(res, "Session created successfully", { session });
-
-  } catch (error) {
-    console.error("❌ PT:createBooking Error:", error);
-    next(error);
+    return responseHandler.success(res, "Session created successfully", { session });
+  } catch (err) {
+    return next(err);
   }
 };
 
-// ======================================================================
-// 🔥 UPDATE BOOKING (Admin, Superadmin, Trainer)
-// ======================================================================
-exports.updateBooking = async (req, res, next) => {
-  console.log("\n======================== PT: updateBooking ========================");
-  console.log("👤 User:", req.user);
-  console.log("🔐 accessFilters:", req.accessFilters);
-  console.log("📎 Params:", req.params);
-  console.log("📦 Body:", req.body);
-
+// -------------------------------------------------------
+// UPDATE BOOKING
+// Allowed: Admin, Superadmin, Trainer
+// -------------------------------------------------------
+const updateBooking = async (req, res, next) => {
   try {
+    const id = toInt(req.params.id);
+    if (!id) return next(new Error("Invalid booking ID"));
+
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
-    const id = parseInt(req.params.id);
+    const existing = await prisma.personalTrainingSession.findUnique({ where: { id } });
 
-    if (isNaN(id)) {
-      console.warn("⚠️ PT:updateBooking → Invalid ID:", req.params.id);
-      return next(new Error("Invalid booking ID"));
-    }
-
-    const session = await prisma.personalTrainingSession.findUnique({ where: { id } });
-
-    console.log("📌 Existing Session Before Update:", session ? {
-      id: session.id,
-      trainerId: session.trainerId,
-      memberId: session.memberId,
-      branchId: session.branchId,
-      date: session.date,
-      time: session.time
-    } : null);
-
-    if (!session) return next(new Error("Booking not found"));
-
-    // 🔐 Trainers can only edit their own sessions
-    if (userRole === "personaltrainer" && session.trainerId !== req.user.id) {
-      console.warn("⛔ PT:updateBooking → Trainer tried to edit someone else's session");
+    if (!existing) return next(new Error("Booking not found"));
+    if (userRole === "personaltrainer" && existing.trainerId !== req.user.id)
       return next(new Error("Access denied"));
-    }
-
-    // 🔐 Branch access
-    if (!isSuperAdmin && session.branchId !== userBranchId) {
-      console.warn("⛔ PT:updateBooking → Cross-branch edit blocked");
+    if (!isSuperAdmin && existing.branchId !== userBranchId)
       return next(new Error("Access denied"));
-    }
 
-    // 🟥 Trainer conflict check on update
-    const finalTrainerId = req.body.trainerId ? Number(req.body.trainerId) : session.trainerId;
-    const finalDate = req.body.date ? new Date(req.body.date) : session.date;
-    const finalTime = req.body.time ? req.body.time : session.time;
+    // Resolve new values or fallback to current
+    const newTrainerId = req.body.trainerId ? toInt(req.body.trainerId) : existing.trainerId;
+    const newDate = req.body.date ? toDate(req.body.date) : existing.date;
+    const newTime = req.body.time || existing.time;
 
-    console.log("🔄 Checking trainer conflict on UPDATE:", {
-      trainerId: finalTrainerId,
-      date: finalDate,
-      time: finalTime,
-      branchId: session.branchId,
-      currentSessionId: id
-    });
-
-    const conflictUpdate = await prisma.personalTrainingSession.findFirst({
+    // Conflict detection
+    const conflict = await prisma.personalTrainingSession.findFirst({
       where: {
-        trainerId: finalTrainerId,
-        date: finalDate,
-        time: finalTime,
-        branchId: session.branchId,
+        trainerId: newTrainerId,
+        date: newDate,
+        time: newTime,
+        branchId: existing.branchId,
         status: { not: "Cancelled" },
         id: { not: id }
       }
     });
 
-    if (conflictUpdate) {
-      console.warn("⛔ PT:updateBooking → Trainer conflict found:", {
-        conflictId: conflictUpdate.id,
-        date: conflictUpdate.date,
-        time: conflictUpdate.time
-      });
-      return next(new Error("Trainer already has a booking at this date & time"));
-    }
+    if (conflict) return next(new Error("Trainer already has a booking at this date & time"));
 
     const updated = await prisma.personalTrainingSession.update({
       where: { id },
-      data: req.body,
+      data: req.body
     });
 
-    console.log("✅ PT:updateBooking → Updated session:", {
-      id: updated.id,
-      trainerId: updated.trainerId,
-      memberId: updated.memberId,
-      branchId: updated.branchId,
-      date: updated.date,
-      time: updated.time
-    });
-
-    responseHandler.success(res, "Session updated successfully", { updated });
-
-  } catch (error) {
-    console.error("❌ PT:updateBooking Error:", error);
-    next(error);
+    return responseHandler.success(res, "Session updated successfully", { updated });
+  } catch (err) {
+    return next(err);
   }
 };
 
-// ======================================================================
-// 🔥 DELETE BOOKING (Admin, Superadmin, Trainer)
-// ======================================================================
-exports.deleteBooking = async (req, res, next) => {
-  console.log("\n======================== PT: deleteBooking ========================");
-  console.log("👤 User:", req.user);
-  console.log("🔐 accessFilters:", req.accessFilters);
-  console.log("📎 Params:", req.params);
-
+// -------------------------------------------------------
+// DELETE BOOKING
+// Allowed: Admin, Superadmin, Trainer
+// -------------------------------------------------------
+const deleteBooking = async (req, res, next) => {
   try {
+    const id = toInt(req.params.id);
+    if (!id) return next(new Error("Invalid booking ID"));
+
     const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
-    const id = parseInt(req.params.id);
-
-    if (isNaN(id)) {
-      console.warn("⚠️ PT:deleteBooking → Invalid ID:", req.params.id);
-      return next(new Error("Invalid booking ID"));
-    }
-
     const session = await prisma.personalTrainingSession.findUnique({ where: { id } });
 
-    console.log("📌 Session to Delete:", session ? {
-      id: session.id,
-      trainerId: session.trainerId,
-      memberId: session.memberId,
-      branchId: session.branchId,
-      date: session.date,
-      time: session.time
-    } : null);
-
     if (!session) return next(new Error("Booking not found"));
-
-    // 🟦 Trainers can only delete their own bookings
-    if (userRole === "personaltrainer" && session.trainerId !== req.user.id) {
-      console.warn("⛔ PT:deleteBooking → Trainer tried to delete someone else's session");
+    if (userRole === "personaltrainer" && session.trainerId !== req.user.id)
       return next(new Error("Access denied"));
-    }
-
-    // 🟦 Branch protection
-    if (!isSuperAdmin && session.branchId !== userBranchId) {
-      console.warn("⛔ PT:deleteBooking → Cross-branch delete blocked");
+    if (!isSuperAdmin && session.branchId !== userBranchId)
       return next(new Error("Access denied"));
-    }
 
     await prisma.personalTrainingSession.delete({ where: { id } });
-
-    console.log("✅ PT:deleteBooking → Deleted session ID:", id);
-
-    responseHandler.success(res, "Session deleted successfully");
-
-  } catch (error) {
-    console.error("❌ PT:deleteBooking Error:", error);
-    next(error);
+    return responseHandler.success(res, "Session deleted successfully");
+  } catch (err) {
+    return next(err);
   }
+};
+
+module.exports = {
+  getAllBookings,
+  getBookingById,
+  createBooking,
+  updateBooking,
+  deleteBooking
 };

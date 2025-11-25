@@ -1,13 +1,17 @@
-const { PrismaClient } = require('@prisma/client');
-const logger = require('../utils/logger');
+"use strict";
+
+const { PrismaClient } = require("@prisma/client");
+const logger = require("../utils/logger");
+
 const prisma = new PrismaClient();
 
-//--------------------------------
-// Safe Helpers
-//--------------------------------
+/* =====================================================================
+    HELPER UTILITIES
+===================================================================== */
+
 const toInt = (value) => {
-  const num = parseInt(value);
-  return Number.isNaN(num) ? null : num;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 };
 
 const toDate = (value) => {
@@ -19,33 +23,36 @@ const toDate = (value) => {
   }
 };
 
-// Convert schedule_day input (array/string) -> string for DB
 const normalizeScheduleDay = (value) => {
   if (!value) return "";
-  if (Array.isArray(value)) return value.join(',');
-  return String(value);
+  return Array.isArray(value) ? value.join(",") : String(value);
 };
 
-// Convert DB string -> array
-const toArray = (value) => {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.map(d => d.trim());
-  if (typeof value === 'string') return value.split(',').map(d => d.trim());
-  return [];
-};
+const toArray = (value) =>
+  typeof value === "string"
+    ? value.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
-// ============================
+/* =====================================================================
+    CLASS QUERIES
+===================================================================== */
+
 // GET ALL CLASSES
-// ============================
 exports.getAllClasses = async (filters = {}) => {
-  logger.info("📌 getAllClasses called", filters);
+  logger.info("getAllClasses called", filters);
+
   try {
     const where = {};
-    if (filters.branchId) where.branchId = toInt(filters.branchId);
-    if (filters.trainerId) where.trainerId = toInt(filters.trainerId);
-    if (filters.status) where.status = filters.status;
 
-    const list = await prisma.classSchedule.findMany({
+    const branch = toInt(filters?.branchId);
+    if (branch) where.branchId = branch;
+
+    const trainer = toInt(filters?.trainerId);
+    if (trainer) where.trainerId = trainer;
+
+    if (filters?.status) where.status = filters.status;
+
+    const rows = await prisma.classSchedule.findMany({
       where,
       include: {
         trainer: { select: { id: true, firstName: true, lastName: true, role: true } },
@@ -55,36 +62,36 @@ exports.getAllClasses = async (filters = {}) => {
       orderBy: { createdAt: "desc" },
     });
 
-    return list.map(cls => ({
+    return rows.map((cls) => ({
       id: cls.id,
-      class_name: cls.className,
-      trainer_id: cls.trainerId,
+      className: cls.className,
+      trainerId: cls.trainerId,
       date: cls.date,
       time: cls.time,
-      schedule_day: toArray(cls.scheduleDay),
-      total_sheets: cls.totalSheets,
-      status: cls.status,
+      scheduleDays: toArray(cls.scheduleDay),
+      totalSeats: cls.totalSheets,
+      bookedSeats: cls.bookedSeats,
+      roomName: cls.roomName,
       branchId: cls.branchId,
-      adminId: cls.adminId,
-      room_name: cls.roomName,
-      booked_seats: cls.bookedSeats,
+      status: cls.status,
       createdAt: cls.createdAt,
       updatedAt: cls.updatedAt,
       trainer: cls.trainer,
       branch: cls.branch,
       admin: cls.admin,
     }));
-  } catch (error) {
-    logger.error("❌ getAllClasses error", error);
-    throw error;
+  } catch (err) {
+    logger.error("getAllClasses error", err);
+    throw err;
   }
 };
 
-// ============================
-// GET DAILY CLASSES
-// ============================
+/* =====================================================================
+    GET DAILY CLASSES
+===================================================================== */
+
 exports.getDailyClasses = async (role, trainerId, branchId) => {
-  logger.info("📅 getDailyClasses called", { role, trainerId, branchId });
+  logger.info("getDailyClasses called", { role, trainerId, branchId });
 
   try {
     const today = new Date();
@@ -93,58 +100,50 @@ exports.getDailyClasses = async (role, trainerId, branchId) => {
     const where = {
       date: today,
       branchId: toInt(branchId),
-      status: { not: "Canceled" } // Show Scheduled and Completed
+      status: { not: "Canceled" },
     };
 
-    // If trainer, filter by their classes
-    if (role === 'generaltrainer' || role === 'personaltrainer') {
+    if (["generaltrainer", "personaltrainer"].includes(role)) {
       where.trainerId = toInt(trainerId);
     }
 
-    const list = await prisma.classSchedule.findMany({
+    const rows = await prisma.classSchedule.findMany({
       where,
       include: {
         trainer: { select: { id: true, firstName: true, lastName: true, role: true } },
         branch: { select: { id: true, name: true } },
         admin: { select: { id: true, firstName: true, lastName: true } },
-        members: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            memberId: true,
-            email: true,
-          },
-        },
+        members: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
       orderBy: { time: "asc" },
     });
 
-    return list.map(cls => ({
-      class_schedule_id: cls.id,
-      class_name: cls.className,
-      trainer_id: cls.trainerId,
-      start_time: cls.time?.split('-')[0] || cls.time,
-      end_time: cls.time?.split('-')[1] || cls.time,
-      room_name: cls.roomName || "--",
-      capacity: cls.totalSheets,
-      booked_seats: cls.bookedSeats,
+    return rows.map((cls) => ({
+      id: cls.id,
+      className: cls.className,
+      startTime: cls.time?.split("-")[0] || cls.time,
+      endTime: cls.time?.split("-")[1] || cls.time,
+      trainerId: cls.trainerId,
+      roomName: cls.roomName ?? "--",
+      totalSeats: cls.totalSheets,
+      bookedSeats: cls.bookedSeats,
       status: cls.status,
       trainer: cls.trainer,
       branch: cls.branch,
       members: cls.members,
     }));
-  } catch (error) {
-    logger.error("❌ getDailyClasses error", error);
-    throw error;
+  } catch (err) {
+    logger.error("getDailyClasses error", err);
+    throw err;
   }
 };
 
-// ============================
-// GET CLASS BY ID
-// ============================
+/* =====================================================================
+    GET CLASS BY ID
+===================================================================== */
+
 exports.getClassById = async (id, branchId = null) => {
-  logger.info("🔎 getClassById", { id, branchId });
+  logger.info("getClassById", { id, branchId });
 
   try {
     const where = { id: toInt(id) };
@@ -153,85 +152,84 @@ exports.getClassById = async (id, branchId = null) => {
     const cls = await prisma.classSchedule.findFirst({
       where,
       include: {
-        trainer: { select: { id: true, firstName: true, lastName: true, role: true } },
-        branch: { select: { id: true, name: true } },
-        admin: { select: { id: true, firstName: true, lastName: true } },
+        trainer: true,
+        branch: true,
+        admin: true,
       },
     });
 
-    if (!cls) return null;
-
-    return {
-      ...cls,
-      schedule_day: toArray(cls.scheduleDay),
-    };
-  } catch (error) {
-    logger.error("❌ getClassById error", error);
-    throw error;
+    return cls ? { ...cls, scheduleDays: toArray(cls.scheduleDay) } : null;
+  } catch (err) {
+    logger.error("getClassById error", err);
+    throw err;
   }
 };
 
-// ============================
-// CREATE CLASS
-// ============================
+/* =====================================================================
+    CREATE CLASS
+===================================================================== */
+
 exports.createClass = async (data, userId) => {
-  logger.info("🟢 createClass called", data);
+  logger.info("createClass called", data);
 
   try {
     const dateObj = toDate(data.date);
-    if (!dateObj) throw new Error("Invalid or missing date");
+    if (!dateObj) throw new Error("Invalid date provided");
 
-    // trainer conflict
+    const trainer = toInt(data.trainer_id);
+    const branch = toInt(data.branchId);
+
+    // Validate trainer availability
     const conflict = await prisma.classSchedule.findFirst({
       where: {
-        trainerId: toInt(data.trainer_id),
+        trainerId: trainer,
         date: dateObj,
         time: data.time,
-        branchId: toInt(data.branchId),
+        branchId: branch,
         status: { not: "Canceled" },
       },
     });
 
-    if (conflict) throw new Error("Trainer is already scheduled at this time.");
+    if (conflict) throw new Error("Trainer is already scheduled at this time");
 
     const created = await prisma.classSchedule.create({
       data: {
         className: data.class_name,
-        trainerId: toInt(data.trainer_id),
+        trainerId: trainer,
         date: dateObj,
         time: data.time,
         scheduleDay: normalizeScheduleDay(data.schedule_day),
         totalSheets: Number(data.total_sheets) || 20,
         status: data.status || "Scheduled",
-        branchId: toInt(data.branchId),
+        branchId: branch,
         adminId: toInt(userId),
       },
       include: { trainer: true, branch: true, admin: true },
     });
 
-    logger.info(`Class created: ${created.className} by user ${userId}`);
-
-    return { ...created, schedule_day: toArray(created.scheduleDay) };
-  } catch (error) {
-    logger.error("❌ createClass error", error);
-    throw error;
+    return { ...created, scheduleDays: toArray(created.scheduleDay) };
+  } catch (err) {
+    logger.error("createClass error", err);
+    throw err;
   }
 };
 
-// ============================
-// UPDATE CLASS
-// ============================
+/* =====================================================================
+    UPDATE CLASS
+===================================================================== */
+
 exports.updateClass = async (id, data, userId, branchId = null) => {
-  logger.info("🟪 updateClass called", { id, data });
+  logger.info("updateClass called", { id, data });
 
   try {
+    const classId = toInt(id);
+
     const existing = await prisma.classSchedule.findFirst({
-      where: { id: toInt(id), ...(branchId && { branchId: toInt(branchId) }) },
+      where: { id: classId, ...(branchId && { branchId: toInt(branchId) }) },
     });
 
     if (!existing) throw new Error("Class not found");
 
-    // conflict validation
     const newTrainer = data.trainer_id ? toInt(data.trainer_id) : existing.trainerId;
     const newDate = data.date ? toDate(data.date) : existing.date;
     if (!newDate) throw new Error("Invalid date");
@@ -243,15 +241,15 @@ exports.updateClass = async (id, data, userId, branchId = null) => {
         date: newDate,
         time: newTime,
         branchId: existing.branchId,
-        status: "Active",
-        id: { not: toInt(id) },
+        status: { not: "Canceled" },
+        id: { not: classId },
       },
     });
 
-    if (conflict) throw new Error("Trainer is already scheduled at this time.");
+    if (conflict) throw new Error("Trainer is already scheduled at this time");
 
     const updated = await prisma.classSchedule.update({
-      where: { id: toInt(id) },
+      where: { id: classId },
       data: {
         className: data.class_name ?? existing.className,
         trainerId: newTrainer,
@@ -264,20 +262,19 @@ exports.updateClass = async (id, data, userId, branchId = null) => {
       include: { trainer: true, branch: true, admin: true },
     });
 
-    logger.info(`Class updated: ${updated.className} by user ${userId}`);
-
-    return { ...updated, schedule_day: toArray(updated.scheduleDay) };
-  } catch (error) {
-    logger.error("❌ updateClass error", error);
-    throw error;
+    return { ...updated, scheduleDays: toArray(updated.scheduleDay) };
+  } catch (err) {
+    logger.error("updateClass error", err);
+    throw err;
   }
 };
 
-// ============================
-// DELETE CLASS
-// ============================
+/* =====================================================================
+    DELETE CLASS
+===================================================================== */
+
 exports.deleteClass = async (id, userId, branchId = null) => {
-  logger.info("🗑️ deleteClass", { id });
+  logger.info("deleteClass called", { id });
 
   try {
     const existing = await prisma.classSchedule.findFirst({
@@ -288,71 +285,156 @@ exports.deleteClass = async (id, userId, branchId = null) => {
 
     await prisma.classSchedule.delete({ where: { id: toInt(id) } });
 
-    logger.info(`Class deleted: ${existing.className} by user ${userId}`);
-  } catch (error) {
-    logger.error("❌ deleteClass error", error);
-    throw error;
+    return true;
+  } catch (err) {
+    logger.error("deleteClass error", err);
+    throw err;
   }
 };
 
-// ============================
-// GET TRAINERS
-// ============================
+/* =====================================================================
+    GET TRAINERS
+===================================================================== */
+
 exports.getTrainers = async (branchId = null) => {
-  logger.info("🐾 getTrainers");
+  logger.info("getTrainers called");
 
   try {
-    const trainers = await prisma.user.findMany({
+    return await prisma.user.findMany({
       where: {
         role: { in: ["generaltrainer", "personaltrainer"] },
         ...(branchId && { branchId: toInt(branchId) }),
       },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-      },
+      select: { id: true, firstName: true, lastName: true, email: true },
       orderBy: { firstName: "asc" },
     });
-
-    return trainers;
-  } catch (error) {
-    logger.error("❌ getTrainers error", error);
-    throw error;
+  } catch (err) {
+    logger.error("getTrainers error", err);
+    throw err;
   }
 };
 
-// ============================
-// GET CLASS MEMBERS
-// ============================
+/* =====================================================================
+    CLASS MEMBERS
+===================================================================== */
+
 exports.getClassMembers = async (classId, branchId = null) => {
-  logger.info("👥 getClassMembers", { classId, branchId });
+  logger.info("getClassMembers called");
 
   try {
-    const where = { id: toInt(classId) };
-    if (branchId) where.branchId = toInt(branchId);
+    const where = { id: toInt(classId), ...(branchId && { branchId: toInt(branchId) }) };
 
     const cls = await prisma.classSchedule.findFirst({
       where,
       include: {
-        members: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            memberId: true,
-            email: true,
-          },
-        },
+        members: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
     });
 
-    if (!cls) return [];
+    return cls ? cls.members : [];
+  } catch (err) {
+    logger.error("getClassMembers error", err);
+    throw err;
+  }
+};
 
-    return cls.members;
-  } catch (error) {
-    logger.error("❌ getClassMembers error", error);
-    throw error;
+/* =====================================================================
+    MEMBER - WEEKLY GROUP CLASSES
+===================================================================== */
+
+exports.getWeeklyGroupClasses = async (branchId) => {
+  logger.info("getWeeklyGroupClasses called");
+
+  try {
+    const today = new Date();
+    const start = new Date();
+    start.setDate(today.getDate() - today.getDay());
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+
+    const where = {
+      date: { gte: start, lte: end },
+      status: { not: "Canceled" },
+    };
+
+    const b = toInt(branchId);
+    if (b) where.branchId = b;
+
+    const rows = await prisma.classSchedule.findMany({
+      where,
+      include: { trainer: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: [{ date: "asc" }, { time: "asc" }],
+    });
+
+    return rows.map((cls) => ({
+      id: cls.id,
+      name: cls.className,
+      trainerId: cls.trainerId,
+      date: cls.date.toISOString().split("T")[0],
+      time: cls.time,
+      totalSeats: cls.totalSheets,
+      bookedSeats: cls.bookedSeats,
+      trainer: {
+        id: cls.trainer.id,
+        name: `${cls.trainer.firstName} ${cls.trainer.lastName}`,
+      },
+    }));
+  } catch (err) {
+    logger.error("getWeeklyGroupClasses error", err);
+    throw err;
+  }
+};
+
+/* =====================================================================
+    BOOK GROUP CLASS (MEMBERS)
+===================================================================== */
+
+exports.bookGroupClass = async (memberId, classId) => {
+  logger.info("bookGroupClass called");
+
+  try {
+    const cls = await prisma.classSchedule.findFirst({
+      where: { id: toInt(classId) },
+    });
+
+    if (!cls) throw new Error("Class not found");
+    if (cls.status === "Canceled") throw new Error("Class is canceled");
+    if (cls.bookedSeats >= cls.totalSheets) throw new Error("Class is full");
+
+    const member = await prisma.user.findFirst({
+      where: { id: toInt(memberId) },
+      select: { branchId: true },
+    });
+
+    if (!member || member.branchId !== cls.branchId)
+      throw new Error("Access denied: Member must belong to same branch");
+
+    const existingBooking = await prisma.groupClassBooking.findFirst({
+      where: {
+        memberId: toInt(memberId),
+        classScheduleId: toInt(classId),
+        status: { not: "Canceled" },
+      },
+    });
+
+    if (existingBooking) throw new Error("Already booked");
+
+    const booking = await prisma.groupClassBooking.create({
+      data: {
+        memberId: toInt(memberId),
+        classScheduleId: toInt(classId),
+        status: "Booked",
+      },
+    });
+
+    await prisma.classSchedule.update({
+      where: { id: toInt(classId) },
+      data: { bookedSeats: { increment: 1 } },
+    });
+
+    return booking;
+  } catch (err) {
+    logger.error("bookGroupClass error", err);
+    throw err;
   }
 };

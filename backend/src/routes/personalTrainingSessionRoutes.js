@@ -1,67 +1,64 @@
 const express = require('express');
 const router = express.Router();
-const personalTrainingSessionController = require('../controllers/personalTrainingSessionController');
+const controller = require('../controllers/personalTrainingSessionController');
+
 const { authenticateToken } = require('../middlewares/auth.middleware');
 const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
 
-// ------------------------------
-// STATIC ROUTES FIRST (AVOID /:id conflict)
-// ------------------------------
+// ================= STATIC =================
 
-// Get trainers for dropdown
+// Trainers List
 router.get('/trainers/list',
   authenticateToken,
   accessControl(),
-  personalTrainingSessionController.getTrainers
+  controller.getTrainers
 );
 
-// Get members for dropdown
+// Members List
 router.get('/members/list',
   authenticateToken,
   accessControl(),
-  personalTrainingSessionController.getMembersForSessions
+  controller.getMembersForSessions
 );
 
-// ------------------------------
-// MAIN CRUD ROUTES
-// ------------------------------
+// ================= CRUD =================
 
-// Get all sessions (calendar & list view)
+// All sessions
 router.get('/',
   authenticateToken,
   accessControl(),
-  personalTrainingSessionController.getSessions
+  controller.getSessions
 );
 
-// Get session by ID (restrict to number only)
+// Single session by ID (Number Only)
 router.get('/:id(\\d+)',
   authenticateToken,
   accessControl(),
-  personalTrainingSessionController.getSessionById
+  controller.getSessionById
 );
 
-// Create new session
+// Create session
 router.post('/',
   authenticateToken,
   accessControl(),
   checkPermission(['superadmin', 'admin', 'personaltrainer']),
-  personalTrainingSessionController.createSession
+  controller.createSession
 );
 
-// Update session (restrict to number only)
+// Update session
 router.put('/:id(\\d+)',
   authenticateToken,
   accessControl(),
   checkPermission(['superadmin', 'admin', 'personaltrainer']),
-  personalTrainingSessionController.updateSession
+  controller.updateSession
 );
 
-// Delete session (restrict to number only)
+// Delete session (Trainer Cannot Delete)
 router.delete('/:id(\\d+)',
   authenticateToken,
   accessControl(),
   checkPermission(['superadmin', 'admin']),
-  personalTrainingSessionController.deleteSession
+  controller.deleteSession
 );
 
 module.exports = router;

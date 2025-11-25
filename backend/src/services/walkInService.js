@@ -1,279 +1,189 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-const logger = require('../utils/logger');
+var prismaClient = require("@prisma/client");
+var prisma = new prismaClient.PrismaClient();
 
-/**
- * Utility function to convert object keys from snake_case to camelCase recursively
- * @param {any} obj - The object to convert
- * @returns {any} - The converted object
- */
-const toCamelCase = (obj) => {
-  if (obj === null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(toCamelCase);
-
-  const camelObj = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      camelObj[camelKey] = toCamelCase(obj[key]);
-    }
-  }
-  return camelObj;
-};
-
-/**
- * Filter object to only include valid WalkIn fields
- * @param {Object} data - The data object to filter
- * @returns {Object} - Filtered object with only valid fields
- */
-const filterWalkInFields = (data) => {
-  const validFields = [
-    'name',
-    'phone',
-    'email',
-    'preferredMembershipPlanId',
-    'interestedIn',
-    'preferredTime',
-    'notes',
-    'branchId',
-    'createdById'
+// Clean Walk-In input (only allowed safe fields)
+function cleanWalkInData(data) {
+  var allowed = [
+    "name",
+    "phone",
+    "email",
+    "preferredMembershipPlanId",
+    "interestedIn",
+    "preferredTime",
+    "notes",
+    "branchId",
+    "createdById"
   ];
 
-  const filtered = {};
-  for (const key of validFields) {
-    if (data.hasOwnProperty(key)) {
-      // Convert preferredTime to proper DateTime if it's a string
-      if (key === 'preferredTime' && data[key] && typeof data[key] === 'string') {
-        // Handle datetime-local input format (YYYY-MM-DDTHH:MM) by adding seconds
+  var result = {};
+
+  for (var i = 0; i < allowed.length; i++) {
+    var key = allowed[i];
+
+    if (data && data[key] !== undefined) {
+      // Date fix (basic beginner friendly)
+      if (key === "preferredTime" && typeof data[key] === "string") {
         if (data[key].match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
-          filtered[key] = new Date(data[key] + ':00');
+          result[key] = new Date(data[key] + ":00"); // add seconds if missing
         } else {
-          filtered[key] = new Date(data[key]);
+          result[key] = new Date(data[key]);
         }
       } else {
-        filtered[key] = data[key];
+        result[key] = data[key];
       }
     }
   }
-  return filtered;
-};
 
-/**
- * WalkIn Service Module
- *
- * Handles all database operations for walk-in visitor registrations.
- * Implements branch-based access control for all operations.
- */
+  return result;
+}
 
-/**
- * Get all walk-ins with optional filtering
- * @param {number|null} branchId - Filter by branch (null for all branches)
- * @param {string} search - Search term for name or phone
- * @returns {Promise<Array>} Array of walk-in records
- */
-const getWalkIns = async (branchId, search = '') => {
-  try {
-    const where = {};
+// Get all Walk-Ins
+function getWalkIns(branchId, search) {
+  var where = {};
+  if (!search) {
+    search = "";
+  }
 
-    // Apply branch filter if specified
-    if (branchId) {
-      where.branchId = branchId;
-    }
+  if (branchId) {
+    where.branchId = branchId;
+  }
 
-    // Apply search filter if provided
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } }
-      ];
-    }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search } }
+    ];
+  }
 
-    const walkIns = await prisma.walkIn.findMany({
-      where,
+  return prisma.walkIn
+    .findMany({
+      where: where,
       include: {
-        branch: {
-          select: { id: true, name: true }
-        },
-        createdBy: {
-          select: { id: true, firstName: true, lastName: true }
-        },
-        preferredMembershipPlan: {
-          select: { id: true, plan_name: true }
-        }
+        branch: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        preferredMembershipPlan: { select: { id: true, plan_name: true } }
       },
-      orderBy: { registeredAt: 'desc' }
-    });
-
-    // Transform the data to include plan name for frontend compatibility
-    const transformedWalkIns = walkIns.map(walkIn => ({
-      ...walkIn,
-      preferredMembershipPlanName: walkIn.preferredMembershipPlan?.plan_name || null
-    }));
-
-    return transformedWalkIns;
-
-    logger.info(`Fetched ${walkIns.length} walk-in registrations`);
-    return walkIns;
-  } catch (error) {
-    logger.error('Error fetching walk-ins:', error);
-    throw new Error('Failed to fetch walk-in registrations');
-  }
-};
-
-/**
- * Get a single walk-in by ID
- * @param {number} id - Walk-in ID
- * @param {number} branchId - Branch ID for access control
- * @returns {Promise<Object>} Walk-in record
- */
-const getWalkInById = async (id, branchId) => {
-  try {
-    const walkIn = await prisma.walkIn.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        branch: {
-          select: { id: true, name: true }
-        },
-        createdBy: {
-          select: { id: true, firstName: true, lastName: true }
+      orderBy: { registeredAt: "desc" }
+    })
+    .then(function (list) {
+      // Add name for easy frontend reading
+      for (var i = 0; i < list.length; i++) {
+        var row = list[i];
+        if (row.preferredMembershipPlan) {
+          row.preferredMembershipPlanName = row.preferredMembershipPlan.plan_name;
+        } else {
+          row.preferredMembershipPlanName = null;
         }
       }
+      return list;
+    })
+    .catch(function () {
+      throw new Error("Failed to fetch walk-in registrations");
     });
+}
 
-    if (!walkIn) {
-      throw new Error('Walk-in registration not found');
-    }
+// Get single Walk-In
+function getWalkInById(id, branchId) {
+  id = parseInt(id);
 
-    // Check branch access
-    if (walkIn.branchId !== branchId) {
-      throw new Error('Access denied: Not your branch');
-    }
-
-    return walkIn;
-  } catch (error) {
-    console.error('Error fetching walk-in by ID:', error);
-    throw error;
-  }
-};
-
-/**
- * Create a new walk-in registration
- * @param {Object} walkInData - Walk-in data
- * @param {number} createdById - User ID who created the record
- * @returns {Promise<Object>} Created walk-in record
- */
-const createWalkIn = async (walkInData, createdById) => {
-  try {
-    // Filter to only include valid WalkIn fields
-    const filteredData = filterWalkInFields(walkInData);
-
-    const walkIn = await prisma.walkIn.create({
-      data: {
-        ...filteredData,
-        createdById: createdById
-      },
+  return prisma.walkIn
+    .findUnique({
+      where: { id: id },
       include: {
-        branch: {
-          select: { id: true, name: true }
-        },
-        createdBy: {
-          select: { id: true, firstName: true, lastName: true }
-        }
+        branch: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } }
       }
+    })
+    .then(function (row) {
+      if (!row) {
+        throw new Error("Walk-in registration not found");
+      }
+      if (branchId && row.branchId !== branchId) {
+        throw new Error("Access denied: Not your branch");
+      }
+      return row;
+    })
+    .catch(function (error) {
+      throw error;
     });
+}
 
-    logger.info(`Created new walk-in registration with ID: ${walkIn.id}`);
-    return walkIn;
-  } catch (error) {
-    logger.error('Error creating walk-in:', error);
-    throw error;
-  }
-};
+// Create Walk-In
+function createWalkIn(data, createdById) {
+  var cleaned = cleanWalkInData(data);
+  cleaned.createdById = createdById;
 
-/**
- * Update an existing walk-in registration
- * @param {number} id - Walk-in ID
- * @param {Object} walkInData - Updated walk-in data
- * @param {number|null} branchId - Branch ID for access control (null for superadmin)
- * @returns {Promise<Object>} Updated walk-in record
- */
-const updateWalkIn = async (id, walkInData, branchId) => {
-  try {
-    // First check if the walk-in exists and belongs to the user's branch
-    const existingWalkIn = await prisma.walkIn.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    if (!existingWalkIn) {
-      throw new Error('Walk-in registration not found');
-    }
-
-    // Check branch access (allow if branchId is null for superadmin)
-    if (branchId && existingWalkIn.branchId !== branchId) {
-      throw new Error('Access denied: Not your branch');
-    }
-
-    // Filter to only include valid WalkIn fields
-    const filteredData = filterWalkInFields(walkInData);
-
-    const walkIn = await prisma.walkIn.update({
-      where: { id: parseInt(id) },
-      data: filteredData,
+  return prisma.walkIn
+    .create({
+      data: cleaned,
       include: {
-        branch: {
-          select: { id: true, name: true }
-        },
-        createdBy: {
-          select: { id: true, firstName: true, lastName: true }
-        }
+        branch: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } }
       }
+    })
+    .then(function (row) {
+      return row;
+    })
+    .catch(function () {
+      throw new Error("Error creating walk-in");
     });
+}
 
-    logger.info(`Updated walk-in registration with ID: ${walkIn.id}`);
-    return walkIn;
-  } catch (error) {
-    logger.error('Error updating walk-in:', error);
-    throw error;
-  }
-};
+// Update Walk-In
+function updateWalkIn(id, data, branchId) {
+  id = parseInt(id);
 
-/**
- * Delete a walk-in registration
- * @param {number} id - Walk-in ID
- * @param {number|null} branchId - Branch ID for access control (null for superadmin)
- * @returns {Promise<void>}
- */
-const deleteWalkIn = async (id, branchId) => {
-  try {
-    // First check if the walk-in exists and belongs to the user's branch
-    const existingWalkIn = await prisma.walkIn.findUnique({
-      where: { id: parseInt(id) }
+  return prisma.walkIn
+    .findUnique({ where: { id: id } })
+    .then(function (existing) {
+      if (!existing) {
+        throw new Error("Walk-in registration not found");
+      }
+      if (branchId && existing.branchId !== branchId) {
+        throw new Error("Access denied: Not your branch");
+      }
+
+      var cleaned = cleanWalkInData(data);
+
+      return prisma.walkIn.update({
+        where: { id: id },
+        data: cleaned,
+        include: {
+          branch: { select: { id: true, name: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } }
+        }
+      });
+    })
+    .catch(function (error) {
+      throw error;
     });
+}
 
-    if (!existingWalkIn) {
-      throw new Error('Walk-in registration not found');
-    }
+// Delete Walk-In
+function deleteWalkIn(id, branchId) {
+  id = parseInt(id);
 
-    // Check branch access (allow if branchId is null for superadmin)
-    if (branchId && existingWalkIn.branchId !== branchId) {
-      throw new Error('Access denied: Not your branch');
-    }
+  return prisma.walkIn
+    .findUnique({ where: { id: id } })
+    .then(function (existing) {
+      if (!existing) {
+        throw new Error("Walk-in registration not found");
+      }
+      if (branchId && existing.branchId !== branchId) {
+        throw new Error("Access denied: Not your branch");
+      }
 
-    await prisma.walkIn.delete({
-      where: { id: parseInt(id) }
+      return prisma.walkIn.delete({ where: { id: id } });
+    })
+    .catch(function (error) {
+      throw error;
     });
-
-    logger.info(`Deleted walk-in registration with ID: ${id}`);
-  } catch (error) {
-    logger.error('Error deleting walk-in:', error);
-    throw error;
-  }
-};
+}
 
 module.exports = {
-  getWalkIns,
-  getWalkInById,
-  createWalkIn,
-  updateWalkIn,
-  deleteWalkIn
+  getWalkIns: getWalkIns,
+  getWalkInById: getWalkInById,
+  createWalkIn: createWalkIn,
+  updateWalkIn: updateWalkIn,
+  deleteWalkIn: deleteWalkIn
 };

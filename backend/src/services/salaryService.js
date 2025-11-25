@@ -1,8 +1,11 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// =====================================================
+// 📌 GET ALL SALARIES (SuperAdmin)
+// =====================================================
 const getAllSalaries = async () => {
-  return await prisma.salary.findMany({
+  return prisma.salary.findMany({
     include: {
       staff: {
         include: {
@@ -13,18 +16,17 @@ const getAllSalaries = async () => {
       },
       approvedByUser: true,
     },
-    orderBy: {
-      createdAt: 'desc',
-    },
+    orderBy: { createdAt: "desc" },
   });
 };
 
+// =====================================================
+// 📌 GET SALARIES BY BRANCH
+// =====================================================
 const getSalariesByBranch = async (branchId) => {
-  return await prisma.salary.findMany({
+  return prisma.salary.findMany({
     where: {
-      staff: {
-        branchId: branchId,
-      },
+      staff: { branchId: Number(branchId) },
     },
     include: {
       staff: {
@@ -36,15 +38,16 @@ const getSalariesByBranch = async (branchId) => {
       },
       approvedByUser: true,
     },
-    orderBy: {
-      createdAt: 'desc',
-    },
+    orderBy: { createdAt: "desc" },
   });
 };
 
+// =====================================================
+// 📌 GET SALARY BY ID
+// =====================================================
 const getSalaryById = async (id) => {
-  return await prisma.salary.findUnique({
-    where: { id: id },
+  return prisma.salary.findUnique({
+    where: { id: Number(id) },
     include: {
       staff: {
         include: {
@@ -58,23 +61,44 @@ const getSalaryById = async (id) => {
   });
 };
 
-const createSalary = async (salaryData, createdById) => {
-  const salary = await prisma.salary.create({
+// =====================================================
+// 📌 CREATE SALARY RECORD
+// =====================================================
+const createSalary = async (data, createdById) => {
+  // prevent runtime errors due to empty values
+  const safeNumber = (val) =>
+    val !== undefined && val !== null && val !== "" ? Number(val) : null;
+
+  // safe object parsing
+  const safeJson = (val) => {
+    if (!val) return null;
+    if (typeof val === "string") {
+      try {
+        return JSON.parse(val);
+      } catch {
+        return null;
+      }
+    }
+    return val;
+  };
+
+  return prisma.salary.create({
     data: {
-      salaryId: salaryData.salaryId,
-      staffId: salaryData.staffId,
-      periodStart: new Date(salaryData.periodStart),
-      periodEnd: new Date(salaryData.periodEnd),
-      hoursWorked: salaryData.hoursWorked ? parseFloat(salaryData.hoursWorked) : null,
-      hourlyTotal: salaryData.hourlyTotal ? parseFloat(salaryData.hourlyTotal) : null,
-      fixedSalary: salaryData.fixedSalary ? parseFloat(salaryData.fixedSalary) : null,
-      commissionTotal: salaryData.commissionTotal ? parseFloat(salaryData.commissionTotal) : null,
-      bonuses: salaryData.bonuses ? (typeof salaryData.bonuses === 'string' ? JSON.parse(salaryData.bonuses) : salaryData.bonuses) : null,
-      deductions: salaryData.deductions ? (typeof salaryData.deductions === 'string' ? JSON.parse(salaryData.deductions) : salaryData.deductions) : null,
-      netPay: parseFloat(salaryData.netPay),
-      status: salaryData.status || 'Generated',
-      approvedBy: salaryData.approvedBy ? parseInt(salaryData.approvedBy) : null,
-      paidAt: salaryData.paidAt ? new Date(salaryData.paidAt) : null,
+      salaryId: data.salaryId || null,
+      staffId: safeNumber(data.staffId),
+      periodStart: data.periodStart ? new Date(data.periodStart) : null,
+      periodEnd: data.periodEnd ? new Date(data.periodEnd) : null,
+      hoursWorked: safeNumber(data.hoursWorked),
+      hourlyTotal: safeNumber(data.hourlyTotal),
+      fixedSalary: safeNumber(data.fixedSalary),
+      commissionTotal: safeNumber(data.commissionTotal),
+      bonuses: safeJson(data.bonuses),
+      deductions: safeJson(data.deductions),
+      netPay: safeNumber(data.netPay),
+      status: data.status || "Generated",
+      approvedBy: safeNumber(data.approvedBy),
+      paidAt: data.paidAt ? new Date(data.paidAt) : null,
+      createdBy: createdById || null,
     },
     include: {
       staff: {
@@ -87,35 +111,49 @@ const createSalary = async (salaryData, createdById) => {
       approvedByUser: true,
     },
   });
-
-  return salary;
 };
 
-const updateSalary = async (id, salaryData) => {
-  const existingSalary = await prisma.salary.findUnique({
-    where: { id: id },
+// =====================================================
+// 📌 UPDATE SALARY RECORD
+// =====================================================
+const updateSalary = async (id, data) => {
+  const existing = await prisma.salary.findUnique({
+    where: { id: Number(id) },
   });
 
-  if (!existingSalary) {
-    throw new Error("Salary record not found");
-  }
+  if (!existing) throw new Error("Salary record not found");
 
-  const updatedSalary = await prisma.salary.update({
-    where: { id: id },
+  const safeNumber = (val, oldVal) =>
+    val !== undefined && val !== null && val !== "" ? Number(val) : oldVal;
+
+  const safeJson = (val, oldVal) => {
+    if (!val) return oldVal;
+    if (typeof val === "string") {
+      try {
+        return JSON.parse(val);
+      } catch {
+        return oldVal;
+      }
+    }
+    return val;
+  };
+
+  return prisma.salary.update({
+    where: { id: Number(id) },
     data: {
-      staffId: salaryData.staffId ? parseInt(salaryData.staffId) : existingSalary.staffId,
-      periodStart: salaryData.periodStart ? new Date(salaryData.periodStart) : existingSalary.periodStart,
-      periodEnd: salaryData.periodEnd ? new Date(salaryData.periodEnd) : existingSalary.periodEnd,
-      hoursWorked: salaryData.hoursWorked !== undefined ? (salaryData.hoursWorked ? parseFloat(salaryData.hoursWorked) : null) : existingSalary.hoursWorked,
-      hourlyTotal: salaryData.hourlyTotal !== undefined ? (salaryData.hourlyTotal ? parseFloat(salaryData.hourlyTotal) : null) : existingSalary.hourlyTotal,
-      fixedSalary: salaryData.fixedSalary !== undefined ? (salaryData.fixedSalary ? parseFloat(salaryData.fixedSalary) : null) : existingSalary.fixedSalary,
-      commissionTotal: salaryData.commissionTotal !== undefined ? (salaryData.commissionTotal ? parseFloat(salaryData.commissionTotal) : null) : existingSalary.commissionTotal,
-      bonuses: salaryData.bonuses ? (typeof salaryData.bonuses === 'string' ? JSON.parse(salaryData.bonuses) : salaryData.bonuses) : existingSalary.bonuses,
-      deductions: salaryData.deductions ? (typeof salaryData.deductions === 'string' ? JSON.parse(salaryData.deductions) : salaryData.deductions) : existingSalary.deductions,
-      netPay: salaryData.netPay ? parseFloat(salaryData.netPay) : existingSalary.netPay,
-      status: salaryData.status || existingSalary.status,
-      approvedBy: salaryData.approvedBy ? parseInt(salaryData.approvedBy) : existingSalary.approvedBy,
-      paidAt: salaryData.paidAt ? new Date(salaryData.paidAt) : existingSalary.paidAt,
+      staffId: safeNumber(data.staffId, existing.staffId),
+      periodStart: data.periodStart ? new Date(data.periodStart) : existing.periodStart,
+      periodEnd: data.periodEnd ? new Date(data.periodEnd) : existing.periodEnd,
+      hoursWorked: safeNumber(data.hoursWorked, existing.hoursWorked),
+      hourlyTotal: safeNumber(data.hourlyTotal, existing.hourlyTotal),
+      fixedSalary: safeNumber(data.fixedSalary, existing.fixedSalary),
+      commissionTotal: safeNumber(data.commissionTotal, existing.commissionTotal),
+      bonuses: safeJson(data.bonuses, existing.bonuses),
+      deductions: safeJson(data.deductions, existing.deductions),
+      netPay: safeNumber(data.netPay, existing.netPay),
+      status: data.status || existing.status,
+      approvedBy: safeNumber(data.approvedBy, existing.approvedBy),
+      paidAt: data.paidAt ? new Date(data.paidAt) : existing.paidAt,
     },
     include: {
       staff: {
@@ -128,22 +166,19 @@ const updateSalary = async (id, salaryData) => {
       approvedByUser: true,
     },
   });
-
-  return updatedSalary;
 };
 
+// =====================================================
+// 📌 DELETE SALARY RECORD
+// =====================================================
 const deleteSalary = async (id) => {
-  const existingSalary = await prisma.salary.findUnique({
-    where: { id: id },
+  const existing = await prisma.salary.findUnique({
+    where: { id: Number(id) },
   });
 
-  if (!existingSalary) {
-    throw new Error("Salary record not found");
-  }
+  if (!existing) throw new Error("Salary record not found");
 
-  await prisma.salary.delete({
-    where: { id: id },
-  });
+  await prisma.salary.delete({ where: { id: Number(id) } });
 
   return { message: "Salary record deleted successfully" };
 };

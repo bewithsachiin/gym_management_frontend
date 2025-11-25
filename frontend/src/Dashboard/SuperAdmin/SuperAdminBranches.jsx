@@ -75,7 +75,7 @@ const SuperAdminBranches = () => {
     try {
       const response = await axiosInstance.get('/branches');
       console.log('✅ Branches response:', response.data);
-      const mappedBranches = response.data.data.branches.map(branch => ({
+      const mappedBranches = response.data.branches.map(branch => ({
         ...branch,
         status: branch.status === 'ACTIVE' ? 'Active' : branch.status === 'INACTIVE' ? 'Inactive' : branch.status === 'MAINTENANCE' ? 'Maintenance' : branch.status,
         manager: branch.admin ? {
@@ -99,7 +99,7 @@ const SuperAdminBranches = () => {
     try {
       const response = await axiosInstance.get('/branches/available-admins');
       console.log('✅ Available admins response:', response.data);
-      setAvailableAdmins(response.data.data.admins);
+      setAvailableAdmins(response.data.admins);
     } catch (err) {
       console.error('❌ Failed to fetch available admins:', err);
     }

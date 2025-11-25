@@ -1,51 +1,57 @@
 const express = require("express");
 const router = express.Router();
+
 const salaryController = require("../controllers/salaryController");
 
+// Middlewares
 const { authenticateToken } = require("../middlewares/auth.middleware");
 const { accessControl, checkPermission } = require("../middlewares/accessControl.middleware");
 
-// Get all salaries
+// ===============================
+// 📌 SALARY ROUTES
+// ===============================
+
+// GET: All salaries
 router.get(
   "/",
   authenticateToken,
   accessControl(),
-  salaryController.getSalaries
+  (req, res, next) => salaryController.getSalaries(req, res, next)
 );
 
-// Get salary by ID
+// GET: Salary by ID
 router.get(
   "/:id",
   authenticateToken,
   accessControl(),
-  salaryController.getSalaryById
+  (req, res, next) => salaryController.getSalaryById(req, res, next)
 );
 
-// Create salary
+// POST: Create salary
 router.post(
   "/",
   authenticateToken,
   accessControl(),
   checkPermission(["superadmin", "admin"]),
-  salaryController.createSalary
+  (req, res, next) => salaryController.createSalary(req, res, next)
 );
 
-// Update salary
+// PUT: Update salary
 router.put(
   "/:id",
   authenticateToken,
   accessControl(),
   checkPermission(["superadmin", "admin"]),
-  salaryController.updateSalary
+  (req, res, next) => salaryController.updateSalary(req, res, next)
 );
 
-// Delete salary
+// DELETE: Delete salary
 router.delete(
   "/:id",
   authenticateToken,
   accessControl(),
   checkPermission(["superadmin", "admin"]),
-  salaryController.deleteSalary
+  (req, res, next) => salaryController.deleteSalary(req, res, next)
 );
 
 module.exports = router;

@@ -1,232 +1,175 @@
-const classService = require('../services/classScheduleService');
-const responseHandler = require('../utils/responseHandler');
+"use strict";
 
-// =========================
+const classService = require("../services/classScheduleService");
+const responseHandler = require("../utils/responseHandler");
+
+// ==========================
+// Helper: Validate numeric ID
+// ==========================
+const validateId = (id) => {
+  const parsed = Number(id);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+// ==========================
 // GET ALL CLASSES
-// =========================
+// ==========================
 exports.getClasses = async (req, res, next) => {
-  console.log("📌 [CONTROLLER] getClasses called | user =", req.user);
-
   try {
     const { role, branchId } = req.user;
-    const filters = {};
-
-    if (role !== 'superadmin') filters.branchId = branchId;
-
-    console.log("🔍 [FILTERS APPLIED] =>", filters);
+    const filters = role !== "superadmin" ? { branchId } : {};
 
     const classes = await classService.getAllClasses(filters);
-
-    responseHandler.success(res, "Classes fetched successfully", { classes });
-  } catch (err) {
-    console.error("❌ [ERROR] getClasses:", err);
-    next(err);
+    return responseHandler.success(res, "Classes fetched successfully", { classes });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
+// ==========================
 // GET CLASS BY ID
-// =========================
+// ==========================
 exports.getClass = async (req, res, next) => {
-  console.log("📌 [CONTROLLER] getClass called | params =", req.params);
-
   try {
-    const { id } = req.params;
-    const { branchId, role } = req.user;
+    const id = validateId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid class ID", 400);
 
-    if (!id || isNaN(id)) {
-      console.warn("⚠️ [WARNING] Invalid class ID:", id);
-      return responseHandler.error(res, "Invalid class ID", 400);
-    }
+    const { role, branchId } = req.user;
+    const classData = await classService.getClassById(id, role !== "superadmin" ? branchId : null);
 
-    const classData = await classService.getClassById(
-      id,
-      role !== 'superadmin' ? branchId : null
-    );
+    if (!classData) return responseHandler.notFound(res, "Class not found");
 
-    if (!classData) {
-      console.warn("⚠️ [NOT FOUND] Class ID:", id);
-      return responseHandler.notFound(res, "Class not found");
-    }
-
-    responseHandler.success(res, "Class fetched successfully", { class: classData });
-  } catch (err) {
-    console.error("❌ [ERROR] getClass:", err);
-    next(err);
+    return responseHandler.success(res, "Class fetched successfully", { class: classData });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
+// ==========================
 // CREATE CLASS
-// =========================
+// ==========================
 exports.createClass = async (req, res, next) => {
-  console.log("📌 [CONTROLLER] createClass called | body =", req.body);
-
   try {
     const userId = req.user.id;
     const branchId = req.user.branchId;
-    const classData = { ...req.body, branchId };
 
-    console.log("🆕 [CREATE CLASS DATA] =>", classData);
+    const payload = { ...req.body, branchId };
+    const newClass = await classService.createClass(payload, userId);
 
-    const newClass = await classService.createClass(classData, userId);
-
-    responseHandler.success(res, "Class created successfully", { class: newClass });
-  } catch (err) {
-    console.error("❌ [ERROR] createClass:", err);
-    next(err);
+    return responseHandler.success(res, "Class created successfully", { class: newClass });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
+// ==========================
 // UPDATE CLASS
-// =========================
+// ==========================
 exports.updateClass = async (req, res, next) => {
-  console.log("📌 [CONTROLLER] updateClass called | params =", req.params, "| body =", req.body);
-
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid class ID", 400);
+
     const userId = req.user.id;
     const branchId = req.user.branchId;
-
-    if (!id || isNaN(id)) {
-      console.warn("⚠️ [WARNING] Invalid class ID:", id);
-      return responseHandler.error(res, "Invalid class ID", 400);
-    }
 
     const updatedClass = await classService.updateClass(id, req.body, userId, branchId);
-
-    responseHandler.success(res, "Class updated successfully", { class: updatedClass });
-  } catch (err) {
-    console.error("❌ [ERROR] updateClass:", err);
-    next(err);
+    return responseHandler.success(res, "Class updated successfully", { class: updatedClass });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
+// ==========================
 // DELETE CLASS
-// =========================
+// ==========================
 exports.deleteClass = async (req, res, next) => {
-  console.log("🗑️ [CONTROLLER] deleteClass | params =", req.params);
-
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid class ID", 400);
+
     const userId = req.user.id;
     const branchId = req.user.branchId;
 
-    if (!id || isNaN(id)) {
-      console.warn("⚠️ [WARNING] Invalid class ID:", id);
-      return responseHandler.error(res, "Invalid class ID", 400);
-    }
-
     await classService.deleteClass(id, userId, branchId);
-
-    responseHandler.success(res, "Class deleted successfully");
-  } catch (err) {
-    console.error("❌ [ERROR] deleteClass:", err);
-    next(err);
+    return responseHandler.success(res, "Class deleted successfully");
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
-// GET DAILY CLASSES
-// =========================
+// ==========================
+// GET DAILY CLASSES (Trainer/Member)
+// ==========================
 exports.getDailyClasses = async (req, res, next) => {
-  console.log("📆 [CONTROLLER] getDailyClasses called | user =", req.user);
-
   try {
     const { id: trainerId, branchId, role } = req.user;
     const classes = await classService.getDailyClasses(role, trainerId, branchId);
 
-    responseHandler.success(res, "Daily classes fetched successfully", { classes });
-  } catch (err) {
-    console.error("❌ [ERROR] getDailyClasses:", err);
-    next(err);
+    return responseHandler.success(res, "Daily classes fetched successfully", { classes });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
-// GET TRAINERS
-// =========================
+// ==========================
+// GET TRAINERS (Admin Only)
+// ==========================
 exports.getTrainers = async (req, res, next) => {
-  console.log("👨‍🏫 [CONTROLLER] getTrainers called | user =", req.user);
-
   try {
     const { branchId } = req.user;
     const trainers = await classService.getTrainers(branchId);
 
-    responseHandler.success(res, "Trainers fetched successfully", { trainers });
-  } catch (err) {
-    console.error("❌ [ERROR] getTrainers:", err);
-    next(err);
+    return responseHandler.success(res, "Trainers fetched successfully", { trainers });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
+// ==========================
 // GET CLASS MEMBERS
-// =========================
+// ==========================
 exports.getClassMembers = async (req, res, next) => {
-  console.log("👥 [CONTROLLER] getClassMembers called | params =", req.params);
-
   try {
-    const { id } = req.params;
+    const id = validateId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid class ID", 400);
+
     const { branchId, role } = req.user;
+    const members = await classService.getClassMembers(id, role !== "superadmin" ? branchId : null);
 
-    if (!id || isNaN(id)) {
-      console.warn("⚠️ [WARNING] Invalid class ID:", id);
-      return responseHandler.error(res, "Invalid class ID", 400);
-    }
-
-    const members = await classService.getClassMembers(
-      id,
-      role !== 'superadmin' ? branchId : null
-    );
-
-    responseHandler.success(res, "Class members fetched successfully", { members });
-  } catch (err) {
-    console.error("❌ [ERROR] getClassMembers:", err);
-    next(err);
+    return responseHandler.success(res, "Class members fetched successfully", { members });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
-// GET WEEKLY GROUP CLASSES (for members)
-// =========================
+// ==========================
+// MEMBERS: WEEKLY GROUP CLASSES
+// ==========================
 exports.getWeeklyGroupClasses = async (req, res, next) => {
-  console.log("📅 [CONTROLLER] getWeeklyGroupClasses called | user =", req.user);
-
   try {
     const { branchId } = req.user;
-
     const classes = await classService.getWeeklyGroupClasses(branchId);
 
-    responseHandler.success(res, "Weekly group classes fetched successfully", { classes });
-  } catch (err) {
-    console.error("❌ [ERROR] getWeeklyGroupClasses:", err);
-    next(err);
+    return responseHandler.success(res, "Weekly group classes fetched successfully", { classes });
+  } catch (error) {
+    next(error);
   }
 };
 
-// =========================
-// BOOK GROUP CLASS (for members)
-// =========================
+// ==========================
+// MEMBERS: BOOK GROUP CLASS
+// ==========================
 exports.bookGroupClass = async (req, res, next) => {
-  console.log("🎫 [CONTROLLER] bookGroupClass called | params =", req.params, "| user =", req.user);
-
   try {
-    const { id } = req.params;
-    const { id: memberId, branchId } = req.user;
+    const classId = validateId(req.params.id);
+    if (!classId) return responseHandler.error(res, "Invalid class ID", 400);
 
-    if (!id || isNaN(id)) {
-      console.warn("⚠️ [WARNING] Invalid class ID:", id);
-      return responseHandler.error(res, "Invalid class ID", 400);
-    }
+    const memberId = req.user.id;
+    const booking = await classService.bookGroupClass(memberId, classId);
 
-    const booking = await classService.bookGroupClass(memberId, id);
-
-    responseHandler.success(res, "Class booked successfully", { booking });
-  } catch (err) {
-    console.error("❌ [ERROR] bookGroupClass:", err);
-    next(err);
+    return responseHandler.success(res, "Class booked successfully", { booking });
+  } catch (error) {
+    next(error);
   }
 };

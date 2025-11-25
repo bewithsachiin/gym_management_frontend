@@ -64,6 +64,22 @@ axiosInstance.interceptors.response.use(
     // Debug Response
     debug.res(response);
 
+    const originalData = response.data;
+
+    // If backend indicates failure, reject the promise
+    if (originalData.success === false) {
+      return Promise.reject({
+        message: originalData.message || 'Request failed',
+        status: response.status,
+        original: response,
+      });
+    }
+
+    // Unwrap the data for successful responses
+    response.data = originalData.data;
+    response.success = originalData.success;
+    response.message = originalData.message;
+
     return response;
   },
   (error) => {

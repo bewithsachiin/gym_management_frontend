@@ -53,11 +53,13 @@ const Login = () => {
   const [email, setEmail] = useState(""); // Store user email input
   const [password, setPassword] = useState(""); // Store user password input
   const [showPassword, setShowPassword] = useState(false); // Toggle visibility of password field
+  const [loading, setLoading] = useState(false); // Loading state for API call
 
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent page reload on form submit
 
+    setLoading(true);
     debugLogin.start(email);
 
     try {
@@ -67,14 +69,8 @@ const Login = () => {
         password,
       });
 
-      // Destructure from backend response
-      const { success, message, token, user } = response.data;
-
-      if (!success) {
-        debugLogin.warn("Backend login failed", message);
-        alert(message);
-        return;
-      }
+      // After axiosInstance unwrapping, response.data contains the actual data
+      const { token, user } = response.data;
 
       // Set user in context (which also handles localStorage)
       login({ ...user, token });
@@ -129,7 +125,10 @@ const Login = () => {
       }
     } catch (error) {
       debugLogin.error(error);
-      alert("Invalid email or password. Please try again.");
+      const errorMessage = error?.message || "Invalid email or password. Please try again.";
+      alert(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -166,6 +165,7 @@ const Login = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    disabled={loading}
                   />
                 </div>
 
@@ -178,6 +178,7 @@ const Login = () => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      disabled={loading}
                       style={{ paddingRight: "40px" }}
                     />
                     <span
@@ -206,8 +207,8 @@ const Login = () => {
                   </a>
                 </div>
 
-                <button type="submit" className="btn btn-warning w-100 py-2">
-                  Login
+                <button type="submit" className="btn btn-warning w-100 py-2" disabled={loading}>
+                  {loading ? "Logging in..." : "Login"}
                 </button>
               </form>
             </div>

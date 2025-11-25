@@ -1,28 +1,32 @@
 const { authenticateToken } = require("./auth.middleware");
 
-/**
- * Middleware for member self-service routes
- * Allows authenticated members to access their own data without branch restrictions
- */
 const memberSelfService = [
-  authenticateToken,
+  authenticateToken, // Always check token first
+
   (req, res, next) => {
-    // Basic authentication check
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+    const user = req.user;
+
+    // Should not happen if authenticateToken works, but safe check
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Authentication required" });
     }
 
-    // Ensure user is a member (case insensitive)
-    if (req.user.role.toLowerCase() !== 'member') {
-      return res.status(403).json({ success: false, message: 'Access restricted to members only' });
+    const role = user.role ? String(user.role).toLowerCase() : "";
+
+    // Only members allowed (no staff, no admin)
+    if (role !== "member") {
+      return res.status(403).json({ success: false, message: "Access restricted to members only" });
     }
 
+    // Assign strict filters for self-service access
+    const branchId = user.branchId ? parseInt(user.branchId) : null;
 
-    // Set basic access filters for member self-service
     req.accessFilters = {
-      userRole: req.user.role,
-      userBranchId: req.user.branchId ? parseInt(req.user.branchId) : null,
-      userId: req.user.id,
+      userRole: "member",
+      userBranchId: branchId,
+      userId: user.id,
+
+      // all other permissions disabled
       isSuperAdmin: false,
       isAdmin: false,
       isTrainer: false,
@@ -30,10 +34,8 @@ const memberSelfService = [
       isMember: true
     };
 
-    next();
+    return next();
   }
 ];
 
-module.exports = {
-  memberSelfService
-};
+module.exports = { memberSelfService };

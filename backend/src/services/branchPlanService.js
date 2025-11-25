@@ -1,155 +1,112 @@
-const { PrismaClient } = require('@prisma/client');
-const logger = require('../utils/logger');
+"use strict";
+
+const { PrismaClient } = require("@prisma/client");
+const logger = require("../utils/logger");
 
 const prisma = new PrismaClient();
 
-// ---------------------------
-// Helper: safe int parsing
-// ---------------------------
+// --------------------------------------------------------
+// SAFE PARSERS (No throw; return null for invalid input)
+// --------------------------------------------------------
 const toInt = (value) => {
-  const num = parseInt(value);
-  return Number.isNaN(num) ? null : num;
+  const num = Number(value);
+  return Number.isInteger(num) && num > 0 ? num : null;
 };
 
-// Helper: priceCents -> "₹X,XXX"
-const formatPrice = (priceCents) => {
-  if (priceCents === undefined || priceCents === null) return null;
-  try {
-    const rupees = Math.round(priceCents / 100);
-    return `₹${rupees.toLocaleString('en-IN')}`;
-  } catch {
-    return null;
-  }
+const parsePrice = (value) => {
+  if (value === undefined || value === null) return null;
+  const clean = value.toString().replace(/[₹,\s]/g, "");
+  const num = parseFloat(clean);
+  return Number.isNaN(num) ? null : Math.round(num * 100);
 };
 
-// Helper: "₹1,200" / 1200 -> cents
-const parsePrice = (price) => {
-  if (price === undefined || price === null) return null;
-  try {
-    const normalized = price.toString().replace(/[₹,]/g, '');
-    const num = parseFloat(normalized);
-    if (Number.isNaN(num)) return null;
-    return Math.round(num * 100);
-  } catch {
-    return null;
-  }
+const formatPrice = (cents) => {
+  if (cents === undefined || cents === null) return null;
+  const rupees = Math.round(cents / 100);
+  return `₹${rupees.toLocaleString("en-IN")}`;
 };
 
-// Helper: "YYYY-MM-DD HH:MM AM/PM"
 const formatDateTime = (date) => {
-  try {
-    const d = new Date(date);
-    if (Number.isNaN(d.getTime())) return null;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
 
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    let hours = d.getHours();
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
+  const YYYY = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, "0");
+  const DD = String(d.getDate()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours || 12;
 
-    return `${year}-${month}-${day} ${hours}:${minutes} ${ampm}`;
-  } catch {
-    return null;
-  }
+  return `${YYYY}-${MM}-${DD} ${hours}:${minutes} ${ampm}`;
 };
 
-// Get all branch plans with filtering (admin can only see their branch plans)
+// --------------------------------------------------------
+// 1) GET ALL BRANCH PLANS
+// --------------------------------------------------------
 const getAllBranchPlans = async (filters = {}, userBranchId = null, userRole = null) => {
-  logger.info('🟦 getAllBranchPlans called', { filters, userBranchId, userRole });
-
   try {
     const { type, active } = filters;
-
     const where = {};
-    if (type) where.type = type;
-    if (active !== undefined) where.active = active === 'true';
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchId = branchIdInt;
-      }
+    if (type) where.type = type;
+    if (active !== undefined) where.active = active === "true";
+
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchId = branchId;
     }
 
     const plans = await prisma.branchPlan.findMany({
       where,
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        branch: { select: { id: true, name: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
-    logger.info('getAllBranchPlans fetched plans', { count: plans.length });
-
-    return plans.map((plan) => ({
-      id: plan.id,
-      name: plan.name,
-      sessions: plan.sessions,
-      validity: plan.validity,
-      price: formatPrice(plan.priceCents),
-      active: plan.active,
-      type: plan.type,
-      createdBy: plan.createdBy,
-      branch: plan.branch,
-      createdAt: plan.createdAt,
-      updatedAt: plan.updatedAt,
+    return plans.map((p) => ({
+      id: p.id,
+      name: p.name,
+      sessions: p.sessions,
+      validity: p.validity,
+      price: formatPrice(p.priceCents),
+      active: p.active,
+      type: p.type,
+      createdBy: p.createdBy,
+      branch: p.branch,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
     }));
+
   } catch (error) {
-    logger.error('❌ getAllBranchPlans error', { error });
+    logger.error("getAllBranchPlans", { error });
     throw error;
   }
 };
 
-// Get branch plan by ID
+// --------------------------------------------------------
+// 2) GET BRANCH PLAN BY ID
+// --------------------------------------------------------
 const getBranchPlanById = async (id, userBranchId = null, userRole = null) => {
-  logger.info('🟨 getBranchPlanById called', { id, userBranchId, userRole });
-
   try {
     const idInt = toInt(id);
-    if (idInt === null) {
-      throw new Error('Invalid branch plan ID');
-    }
+    if (!idInt) return null;
 
     const where = { id: idInt };
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchId = branchIdInt;
-      }
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchId = branchId;
     }
 
     const plan = await prisma.branchPlan.findFirst({
       where,
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        branch: { select: { id: true, name: true } },
       },
     });
 
@@ -168,55 +125,41 @@ const getBranchPlanById = async (id, userBranchId = null, userRole = null) => {
       createdAt: plan.createdAt,
       updatedAt: plan.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ getBranchPlanById error', { error });
+    logger.error("getBranchPlanById", { error });
     throw error;
   }
 };
 
-// Create new branch plan
-const createBranchPlan = async (planData, userId, userBranchId = null, userRole = null) => {
-  logger.info('🟩 createBranchPlan called', { planData, userId, userBranchId, userRole });
-
+// --------------------------------------------------------
+// 3) CREATE BRANCH PLAN
+// --------------------------------------------------------
+const createBranchPlan = async (data, userId, userBranchId = null, userRole = null) => {
   try {
-    const { name, type, sessions, validity, price } = planData;
-
-    const priceCents = parsePrice(price);
-    const sessionsInt = toInt(sessions);
-    const validityInt = toInt(validity);
-    const branchIdInt = toInt(userBranchId);
-    const userIdInt = toInt(userId);
+    const priceCents = parsePrice(data.price);
+    const sessions = toInt(data.sessions);
+    const validity = toInt(data.validity);
+    const branchId = toInt(userBranchId);
+    const creatorId = toInt(userId);
 
     const plan = await prisma.branchPlan.create({
       data: {
-        name,
-        type,
-        sessions: sessionsInt,
-        validity: validityInt,
+        name: data.name,
+        type: data.type,
+        sessions,
+        validity,
         priceCents,
-        currency: 'INR',
+        currency: "INR",
         active: true,
-        branchId: branchIdInt,
-        createdById: userIdInt,
+        branchId,
+        createdById: creatorId,
       },
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        branch: { select: { id: true, name: true } },
       },
     });
-
-    logger.info(`Branch Plan created: ${plan.name} by user ${userId}`);
 
     return {
       id: plan.id,
@@ -231,329 +174,243 @@ const createBranchPlan = async (planData, userId, userBranchId = null, userRole 
       createdAt: plan.createdAt,
       updatedAt: plan.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ createBranchPlan error', { error });
+    logger.error("createBranchPlan", { error });
     throw error;
   }
 };
 
-// Update branch plan
-const updateBranchPlan = async (id, planData, userId, userBranchId = null, userRole = null) => {
-  logger.info('🟪 updateBranchPlan called', { id, planData, userId, userBranchId, userRole });
-
+// --------------------------------------------------------
+// 4) UPDATE BRANCH PLAN
+// --------------------------------------------------------
+const updateBranchPlan = async (id, data, userId, userBranchId = null, userRole = null) => {
   try {
     const idInt = toInt(id);
-    if (idInt === null) {
-      throw new Error('Invalid branch plan ID');
-    }
+    if (!idInt) throw new Error("Invalid plan ID");
 
     const where = { id: idInt };
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchId = branchIdInt;
-      }
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchId = branchId;
     }
 
-    const existingPlan = await prisma.branchPlan.findFirst({ where });
-    if (!existingPlan) {
-      throw new Error('Plan not found');
-    }
+    const existing = await prisma.branchPlan.findFirst({ where });
+    if (!existing) throw new Error("Plan not found");
 
-    const updateData = {};
-    if (planData.name !== undefined) updateData.name = planData.name;
-    if (planData.type !== undefined) updateData.type = planData.type;
-    if (planData.sessions !== undefined) updateData.sessions = toInt(planData.sessions);
-    if (planData.validity !== undefined) updateData.validity = toInt(planData.validity);
-    if (planData.price !== undefined) updateData.priceCents = parsePrice(planData.price);
-    if (planData.active !== undefined) updateData.active = planData.active;
+    const update = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.type !== undefined) update.type = data.type;
+    if (data.sessions !== undefined) update.sessions = toInt(data.sessions);
+    if (data.validity !== undefined) update.validity = toInt(data.validity);
+    if (data.price !== undefined) update.priceCents = parsePrice(data.price);
+    if (data.active !== undefined) update.active = data.active;
 
-    const updatedPlan = await prisma.branchPlan.update({
+    const plan = await prisma.branchPlan.update({
       where: { id: idInt },
-      data: updateData,
+      data: update,
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        branch: { select: { id: true, name: true } },
       },
     });
 
-    logger.info(`Branch Plan updated: ${updatedPlan.name} (ID: ${id}) by user ${userId}`);
-
     return {
-      id: updatedPlan.id,
-      name: updatedPlan.name,
-      sessions: updatedPlan.sessions,
-      validity: updatedPlan.validity,
-      price: formatPrice(updatedPlan.priceCents),
-      active: updatedPlan.active,
-      type: updatedPlan.type,
-      createdBy: updatedPlan.createdBy,
-      branch: updatedPlan.branch,
-      createdAt: updatedPlan.createdAt,
-      updatedAt: updatedPlan.updatedAt,
+      id: plan.id,
+      name: plan.name,
+      sessions: plan.sessions,
+      validity: plan.validity,
+      price: formatPrice(plan.priceCents),
+      active: plan.active,
+      type: plan.type,
+      createdBy: plan.createdBy,
+      branch: plan.branch,
+      createdAt: plan.createdAt,
+      updatedAt: plan.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ updateBranchPlan error', { error });
+    logger.error("updateBranchPlan", { error });
     throw error;
   }
 };
 
-// Delete branch plan
+// --------------------------------------------------------
+// 5) DELETE BRANCH PLAN
+// --------------------------------------------------------
 const deleteBranchPlan = async (id, userId, userBranchId = null, userRole = null) => {
-  logger.info('🟥 deleteBranchPlan called', { id, userId, userBranchId, userRole });
-
   try {
     const idInt = toInt(id);
-    if (idInt === null) {
-      throw new Error('Invalid branch plan ID');
-    }
+    if (!idInt) throw new Error("Invalid plan ID");
 
     const where = { id: idInt };
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchId = branchIdInt;
-      }
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchId = branchId;
     }
 
     const plan = await prisma.branchPlan.findFirst({ where });
-    if (!plan) {
-      throw new Error('Plan not found');
-    }
+    if (!plan) throw new Error("Plan not found");
 
-    const activeBookings = await prisma.branchPlanBooking.count({
-      where: { branchPlanId: idInt, status: 'approved' },
+    const hasBookings = await prisma.branchPlanBooking.count({
+      where: { branchPlanId: idInt, status: "approved" },
     });
 
-    const activeMemberPlans = await prisma.memberBranchPlan.count({
+    const hasMembers = await prisma.memberBranchPlan.count({
       where: { branchPlanId: idInt },
     });
 
-    if (activeBookings > 0 || activeMemberPlans > 0) {
-      throw new Error('Cannot delete plan with active bookings or subscriptions');
+    if (hasBookings || hasMembers) {
+      throw new Error("Cannot delete plan with active subscriptions/bookings");
     }
 
     await prisma.branchPlan.delete({ where: { id: idInt } });
 
-    logger.info(`Branch Plan deleted: ${plan.name} (ID: ${id}) by user ${userId}`);
   } catch (error) {
-    logger.error('❌ deleteBranchPlan error', { error });
+    logger.error("deleteBranchPlan", { error });
     throw error;
   }
 };
 
-// Toggle branch plan active status
+// --------------------------------------------------------
+// 6) TOGGLE STATUS
+// --------------------------------------------------------
 const toggleBranchPlanStatus = async (id, userId, userBranchId = null, userRole = null) => {
-  logger.info('🔁 toggleBranchPlanStatus called', { id, userId, userBranchId, userRole });
-
   try {
     const idInt = toInt(id);
-    if (idInt === null) {
-      throw new Error('Invalid branch plan ID');
-    }
+    if (!idInt) throw new Error("Invalid plan ID");
 
     const where = { id: idInt };
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchId = branchIdInt;
-      }
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchId = branchId;
     }
 
-    const plan = await prisma.branchPlan.findFirst({ where });
-    if (!plan) {
-      throw new Error('Plan not found');
-    }
+    const existing = await prisma.branchPlan.findFirst({ where });
+    if (!existing) throw new Error("Plan not found");
 
-    const updatedPlan = await prisma.branchPlan.update({
+    const plan = await prisma.branchPlan.update({
       where: { id: idInt },
-      data: { active: !plan.active },
+      data: { active: !existing.active },
       include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        branch: { select: { id: true, name: true } },
       },
     });
 
-    logger.info(
-      `Branch Plan status toggled: ${updatedPlan.name} (ID: ${id}) - Active: ${updatedPlan.active} by user ${userId}`
-    );
-
     return {
-      id: updatedPlan.id,
-      name: updatedPlan.name,
-      sessions: updatedPlan.sessions,
-      validity: updatedPlan.validity,
-      price: formatPrice(updatedPlan.priceCents),
-      active: updatedPlan.active,
-      type: updatedPlan.type,
-      createdBy: updatedPlan.createdBy,
-      branch: updatedPlan.branch,
-      createdAt: updatedPlan.createdAt,
-      updatedAt: updatedPlan.updatedAt,
+      id: plan.id,
+      name: plan.name,
+      sessions: plan.sessions,
+      validity: plan.validity,
+      price: formatPrice(plan.priceCents),
+      active: plan.active,
+      type: plan.type,
+      createdBy: plan.createdBy,
+      branch: plan.branch,
+      createdAt: plan.createdAt,
+      updatedAt: plan.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ toggleBranchPlanStatus error', { error });
+    logger.error("toggleBranchPlanStatus", { error });
     throw error;
   }
 };
 
-// Get branch booking requests
+// --------------------------------------------------------
+// 7) GET BOOKING REQUESTS
+// --------------------------------------------------------
 const getBranchBookingRequests = async (userBranchId = null, userRole = null) => {
-  logger.info('📩 getBranchBookingRequests called', { userBranchId, userRole });
-
   try {
     const where = {};
 
-    if (userRole !== 'superadmin' && userBranchId) {
-      const branchIdInt = toInt(userBranchId);
-      if (branchIdInt !== null) {
-        where.branchPlan = { branchId: branchIdInt };
-      }
+    if (userRole !== "superadmin" && userBranchId) {
+      const branchId = toInt(userBranchId);
+      if (branchId) where.branchPlan = { branchId };
     }
 
     const bookings = await prisma.branchPlanBooking.findMany({
       where,
       include: {
-        member: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+        member: { select: { id: true, firstName: true, lastName: true, email: true } },
         branchPlan: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            sessions: true,
-            validity: true,
-            priceCents: true,
-            currency: true,
-          },
+          select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true },
         },
       },
-      orderBy: { requestedAt: 'desc' },
+      orderBy: { requestedAt: "desc" },
     });
 
-    logger.info('getBranchBookingRequests fetched', { count: bookings.length });
-
-    return bookings.map((booking) => ({
-      id: booking.id,
-      memberId: booking.memberId,
-      branchPlanId: booking.branchPlanId,
-      memberName: `${booking.member.firstName} ${booking.member.lastName}`,
-      planName: booking.branchPlan.name,
-      planType: booking.branchPlan.type === 'group' ? 'Group' : 'Personal',
-      sessions: booking.branchPlan.sessions,
-      validity: booking.branchPlan.validity,
-      sessionsUsed: booking.sessionsUsed,
-      requestedAt: formatDateTime(booking.requestedAt),
-      status: booking.status,
-      note: booking.note,
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
+    return bookings.map((b) => ({
+      id: b.id,
+      memberId: b.memberId,
+      branchPlanId: b.branchPlanId,
+      memberName: `${b.member.firstName} ${b.member.lastName}`,
+      planName: b.branchPlan.name,
+      planType: b.branchPlan.type === "group" ? "Group" : "Personal",
+      sessions: b.branchPlan.sessions,
+      validity: b.branchPlan.validity,
+      sessionsUsed: b.sessionsUsed,
+      requestedAt: formatDateTime(b.requestedAt),
+      status: b.status,
+      note: b.note,
+      createdAt: b.createdAt,
+      updatedAt: b.updatedAt,
     }));
+
   } catch (error) {
-    logger.error('❌ getBranchBookingRequests error', { error });
+    logger.error("getBranchBookingRequests", { error });
     throw error;
   }
 };
 
-// Approve branch booking request
+// --------------------------------------------------------
+// 8) APPROVE BOOKING REQUEST
+// --------------------------------------------------------
 const approveBranchBooking = async (bookingId, userId) => {
-  logger.info('🟢 approveBranchBooking called', { bookingId, userId });
-
   try {
-    const bookingIdInt = toInt(bookingId);
-    if (bookingIdInt === null) {
-      throw new Error('Invalid booking ID');
-    }
+    const idInt = toInt(bookingId);
+    if (!idInt) throw new Error("Invalid booking ID");
 
-    const booking = await prisma.branchPlanBooking.findUnique({
-      where: { id: bookingIdInt },
-      include: { branchPlan: true, member: true },
+    const record = await prisma.branchPlanBooking.findUnique({
+      where: { id: idInt },
+      include: { branchPlan: true },
     });
 
-    if (!booking) {
-      throw new Error('Booking request not found');
-    }
-
-    if (booking.status !== 'pending') {
-      throw new Error('Booking request is not pending');
-    }
+    if (!record) throw new Error("Booking not found");
+    if (record.status !== "pending") throw new Error("Only pending requests can be approved");
 
     const result = await prisma.$transaction(async (tx) => {
-      const updatedBooking = await tx.branchPlanBooking.update({
-        where: { id: bookingIdInt },
-        data: { status: 'approved' },
+      const updated = await tx.branchPlanBooking.update({
+        where: { id: idInt },
+        data: { status: "approved" },
         include: {
-          member: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
+          member: { select: { id: true, firstName: true, lastName: true, email: true } },
           branchPlan: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              sessions: true,
-              validity: true,
-              priceCents: true,
-              currency: true,
-            },
+            select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true },
           },
         },
       });
 
-      const startDate = new Date();
-      const expiryDate = new Date();
-      expiryDate.setDate(startDate.getDate() + booking.branchPlan.validity);
+      const start = new Date();
+      const end = new Date();
+      end.setDate(start.getDate() + record.branchPlan.validity);
 
       await tx.memberBranchPlan.create({
         data: {
-          memberId: booking.memberId,
-          branchPlanId: booking.branchPlanId,
-          startDate,
-          expiryDate,
-          remainingSessions: booking.branchPlan.sessions,
+          memberId: record.memberId,
+          branchPlanId: record.branchPlanId,
+          startDate: start,
+          expiryDate: end,
+          remainingSessions: record.branchPlan.sessions,
         },
       });
 
-      return updatedBooking;
+      return updated;
     });
-
-    logger.info(`Branch Booking approved: ID ${bookingId} by user ${userId}`);
 
     return {
       id: result.id,
@@ -561,7 +418,7 @@ const approveBranchBooking = async (bookingId, userId) => {
       branchPlanId: result.branchPlanId,
       memberName: `${result.member.firstName} ${result.member.lastName}`,
       planName: result.branchPlan.name,
-      planType: result.branchPlan.type === 'group' ? 'Group' : 'Personal',
+      planType: result.branchPlan.type === "group" ? "Group" : "Personal",
       sessions: result.branchPlan.sessions,
       validity: result.branchPlan.validity,
       sessionsUsed: result.sessionsUsed,
@@ -571,84 +428,62 @@ const approveBranchBooking = async (bookingId, userId) => {
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ approveBranchBooking error', { error });
+    logger.error("approveBranchBooking", { error });
     throw error;
   }
 };
 
-// Reject branch booking request
+// --------------------------------------------------------
+// 9) REJECT BOOKING REQUEST
+// --------------------------------------------------------
 const rejectBranchBooking = async (bookingId, userId) => {
-  logger.info('🔴 rejectBranchBooking called', { bookingId, userId });
-
   try {
-    const bookingIdInt = toInt(bookingId);
-    if (bookingIdInt === null) {
-      throw new Error('Invalid booking ID');
-    }
+    const idInt = toInt(bookingId);
+    if (!idInt) throw new Error("Invalid booking ID");
 
-    const booking = await prisma.branchPlanBooking.findUnique({
-      where: { id: bookingIdInt },
-    });
+    const record = await prisma.branchPlanBooking.findUnique({ where: { id: idInt } });
+    if (!record) throw new Error("Booking not found");
+    if (record.status !== "pending") throw new Error("Only pending requests can be rejected");
 
-    if (!booking) {
-      throw new Error('Booking request not found');
-    }
-
-    if (booking.status !== 'pending') {
-      throw new Error('Booking request is not pending');
-    }
-
-    const updatedBooking = await prisma.branchPlanBooking.update({
-      where: { id: bookingIdInt },
-      data: { status: 'rejected' },
+    const updated = await prisma.branchPlanBooking.update({
+      where: { id: idInt },
+      data: { status: "rejected" },
       include: {
-        member: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+        member: { select: { id: true, firstName: true, lastName: true, email: true } },
         branchPlan: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            sessions: true,
-            validity: true,
-            priceCents: true,
-            currency: true,
-          },
+          select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true },
         },
       },
     });
 
-    logger.info(`Branch Booking rejected: ID ${bookingId} by user ${userId}`);
-
     return {
-      id: updatedBooking.id,
-      memberId: updatedBooking.memberId,
-      branchPlanId: updatedBooking.branchPlanId,
-      memberName: `${updatedBooking.member.firstName} ${updatedBooking.member.lastName}`,
-      planName: updatedBooking.branchPlan.name,
-      planType: updatedBooking.branchPlan.type === 'group' ? 'Group' : 'Personal',
-      sessions: updatedBooking.branchPlan.sessions,
-      validity: updatedBooking.branchPlan.validity,
-      sessionsUsed: updatedBooking.sessionsUsed,
-      requestedAt: formatDateTime(updatedBooking.requestedAt),
-      status: updatedBooking.status,
-      note: updatedBooking.note,
-      createdAt: updatedBooking.createdAt,
-      updatedAt: updatedBooking.updatedAt,
+      id: updated.id,
+      memberId: updated.memberId,
+      branchPlanId: updated.branchPlanId,
+      memberName: `${updated.member.firstName} ${updated.member.lastName}`,
+      planName: updated.branchPlan.name,
+      planType: updated.branchPlan.type === "group" ? "Group" : "Personal",
+      sessions: updated.branchPlan.sessions,
+      validity: updated.branchPlan.validity,
+      sessionsUsed: updated.sessionsUsed,
+      requestedAt: formatDateTime(updated.requestedAt),
+      status: updated.status,
+      note: updated.note,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
     };
+
   } catch (error) {
-    logger.error('❌ rejectBranchBooking error', { error });
+    logger.error("rejectBranchBooking", { error });
     throw error;
   }
 };
 
+// --------------------------------------------------------
+// EXPORTS
+// --------------------------------------------------------
 module.exports = {
   getAllBranchPlans,
   getBranchPlanById,
@@ -659,4 +494,4 @@ module.exports = {
   getBranchBookingRequests,
   approveBranchBooking,
   rejectBranchBooking,
-}
+};

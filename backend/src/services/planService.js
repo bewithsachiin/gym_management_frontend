@@ -3,517 +3,329 @@ const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
 
-// Get all plans with filtering (membership plans are global)
-const getAllPlans = async (filters = {}) => {
-  const { type, active, adminId } = filters;
+// ------------------------------------------------------
+// UTILITY HELPERS
+// ------------------------------------------------------
+function parseNumber(value) {
+  const num = Number(value);
+  return isNaN(num) ? null : num;
+}
 
+function parsePriceToCents(price) {
+  const num = Number(price);
+  return isNaN(num) ? 0 : Math.round(num * 100);
+}
+
+// ------------------------------------------------------
+// GET ALL PLANS (GLOBAL PLANS - NO BRANCH FILTER)
+// ------------------------------------------------------
+async function getAllPlans(filters) {
   const where = {};
-  // No branchId filtering for membership plans - they are global
-  if (type) where.type = type;
-  if (active !== undefined) where.active = active === 'true';
-  if (adminId) where.adminId = parseInt(adminId);
 
-  // For dropdown/simple list, use minimal include
-  const isSimpleQuery = active === 'true' && !type && !adminId;
+  if (filters && filters.type) {
+    where.type = filters.type;
+  }
+  if (filters && filters.active !== undefined) {
+    where.active = filters.active === 'true';
+  }
+  if (filters && filters.adminId) {
+    where.adminId = parseNumber(filters.adminId);
+  }
 
-  const include = isSimpleQuery ? {
-    admin: {
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-      },
-    },
-    branch: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-  } : {
-    admin: {
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-      },
-    },
-    branch: {
-      select: {
-        id: true,
-        name: true,
-      },
-    },
-    bookings: {
-      select: {
-        id: true,
-        status: true,
-        requestedAt: true,
-        member: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-    },
-    memberPlans: {
-      select: {
-        id: true,
-        startDate: true,
-        expiryDate: true,
-        remainingSessions: true,
-        member: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-    },
-  };
-
-  return await prisma.plan.findMany({
-    where,
-    include,
-    orderBy: { createdAt: 'desc' },
-  });
-};
-
-// Get plan by ID
-const getPlanById = async (id, branchId = null) => {
-  const where = { id: parseInt(id) };
-  if (branchId) where.branchId = parseInt(branchId);
-
-  return await prisma.plan.findFirst({
-    where,
+  return prisma.plan.findMany({
+    where: where,
     include: {
-      admin: {
+      admin: { select: { id: true, firstName: true, lastName: true } },
+      branch: { select: { id: true, name: true } },
+      bookings: {
         select: {
           id: true,
-          firstName: true,
-          lastName: true,
-        },
+          status: true,
+          requestedAt: true,
+          member: { select: { firstName: true, lastName: true, email: true } }
+        }
       },
-      branch: {
+      memberPlans: {
         select: {
           id: true,
-          name: true,
-        },
-      },
+          startDate: true,
+          expiryDate: true,
+          remainingSessions: true,
+          member: { select: { firstName: true, lastName: true, email: true } }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+}
+
+// ------------------------------------------------------
+// GET PLAN BY ID
+// ------------------------------------------------------
+async function getPlanById(id) {
+  const planId = parseNumber(id);
+  if (!planId) return null;
+
+  return prisma.plan.findFirst({
+    where: { id: planId },
+    include: {
+      admin: { select: { id: true, firstName: true, lastName: true } },
+      branch: { select: { id: true, name: true } },
       bookings: {
         include: {
-          member: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
+          member: { select: { id: true, firstName: true, lastName: true, email: true } }
+        }
       },
       memberPlans: {
         include: {
-          member: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
+          member: { select: { id: true, firstName: true, lastName: true, email: true } }
+        }
+      }
+    }
   });
-};
+}
 
-// Create new plan (membership plans are global)
-const createPlan = async (planData, userId) => {
-  const { name, plan_description, type, sessions, validity, price, features } = planData;
+// ------------------------------------------------------
+// CREATE PLAN (GLOBAL PLAN ONLY)
+// ------------------------------------------------------
+async function createPlan(data, userId) {
+  const cleanData = {
+    name: data.name,
+    plan_description: data.plan_description,
+    type: data.type,
+    sessions: parseNumber(data.sessions),
+    validity: parseNumber(data.validity),
+    priceCents: parsePriceToCents(data.price),
+    currency: 'INR',
+    active: true,
+    features: data.features ? data.features : [],
+    adminId: parseNumber(userId),
+    branchId: null
+  };
 
-  // Convert price to cents (assuming price is in rupees)
-  const priceCents = Math.round(parseFloat(price) * 100);
-
-  const plan = await prisma.plan.create({
-    data: {
-      name,
-      plan_description,
-      type,
-      sessions: parseInt(sessions),
-      validity: parseInt(validity),
-      priceCents,
-      currency: 'INR',
-      active: true,
-      features: features || [],
-      adminId: parseInt(userId),
-      branchId: null, // Membership plans are global
-    },
+  const result = await prisma.plan.create({
+    data: cleanData,
     include: {
-      admin: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      branch: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
+      admin: { select: { id: true, firstName: true, lastName: true } },
+      branch: { select: { id: true, name: true } }
+    }
   });
 
-  logger.info(`Plan created: ${plan.name} by user ${userId}`);
-  return plan;
-};
+  logger.info(`Plan created: ${cleanData.name} by user ${userId}`);
+  return result;
+}
 
-// Update plan
-const updatePlan = async (id, planData, userId, branchId = null) => {
-  const { name, plan_description, type, sessions, validity, price, active, features } = planData;
+// ------------------------------------------------------
+// UPDATE PLAN
+// ------------------------------------------------------
+async function updatePlan(id, data, userId) {
+  const planId = parseNumber(id);
+  if (!planId) throw new Error('Invalid plan ID');
 
-  const where = { id: parseInt(id) };
-  if (branchId) where.branchId = parseInt(branchId);
-
-  const existingPlan = await prisma.plan.findFirst({ where });
-  if (!existingPlan) {
-    throw new Error('Plan not found');
-  }
+  const existing = await prisma.plan.findFirst({ where: { id: planId } });
+  if (!existing) throw new Error('Plan not found');
 
   const updateData = {};
-  if (name !== undefined) updateData.name = name;
-  if (plan_description !== undefined) updateData.plan_description = plan_description;
-  if (type !== undefined) updateData.type = type;
-  if (sessions !== undefined) updateData.sessions = parseInt(sessions);
-  if (validity !== undefined) updateData.validity = parseInt(validity);
-  if (price !== undefined) updateData.priceCents = Math.round(parseFloat(price) * 100);
-  if (active !== undefined) updateData.active = active;
-  if (features !== undefined) updateData.features = features;
 
-  const updatedPlan = await prisma.plan.update({
-    where: { id: parseInt(id) },
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.plan_description !== undefined) updateData.plan_description = data.plan_description;
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.sessions !== undefined) updateData.sessions = parseNumber(data.sessions);
+  if (data.validity !== undefined) updateData.validity = parseNumber(data.validity);
+  if (data.price !== undefined) updateData.priceCents = parsePriceToCents(data.price);
+  if (data.active !== undefined) updateData.active = data.active;
+  if (data.features !== undefined) updateData.features = data.features;
+
+  const result = await prisma.plan.update({
+    where: { id: planId },
     data: updateData,
     include: {
-      admin: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      branch: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
+      admin: { select: { id: true, firstName: true, lastName: true } },
+      branch: { select: { id: true, name: true } }
+    }
   });
 
-  logger.info(`Plan updated: ${updatedPlan.name} (ID: ${id}) by user ${userId}`);
-  return updatedPlan;
-};
+  logger.info(`Plan updated: ${result.name} by user ${userId}`);
+  return result;
+}
 
-// Delete plan
-const deletePlan = async (id, userId, branchId = null) => {
-  const where = { id: parseInt(id) };
-  if (branchId) where.branchId = parseInt(branchId);
+// ------------------------------------------------------
+// DELETE PLAN
+// ------------------------------------------------------
+async function deletePlan(id, userId) {
+  const planId = parseNumber(id);
+  if (!planId) throw new Error('Invalid plan ID');
 
-  const plan = await prisma.plan.findFirst({ where });
-  if (!plan) {
-    throw new Error('Plan not found');
-  }
+  const existing = await prisma.plan.findFirst({ where: { id: planId } });
+  if (!existing) throw new Error('Plan not found');
 
-  // Check if plan has active bookings or member plans
-  const activeBookings = await prisma.planBooking.count({
-    where: { planId: parseInt(id), status: 'approved' },
+  const bookingCount = await prisma.planBooking.count({
+    where: { planId: planId, status: 'approved' }
   });
 
-  const activeMemberPlans = await prisma.memberPlan.count({
-    where: { planId: parseInt(id) },
+  const memberCount = await prisma.memberPlan.count({
+    where: { planId: planId }
   });
 
-  if (activeBookings > 0 || activeMemberPlans > 0) {
+  if (bookingCount > 0 || memberCount > 0) {
     throw new Error('Cannot delete plan with active bookings or subscriptions');
   }
 
-  await prisma.plan.delete({ where: { id: parseInt(id) } });
+  await prisma.plan.delete({ where: { id: planId } });
 
-  logger.info(`Plan deleted: ${plan.name} (ID: ${id}) by user ${userId}`);
-};
+  logger.info(`Plan deleted: ${existing.name} by user ${userId}`);
+}
 
-// Toggle plan active status
-const togglePlanStatus = async (id, userId, branchId = null) => {
-  const where = { id: parseInt(id) };
-  if (branchId) where.branchId = parseInt(branchId);
+// ------------------------------------------------------
+// TOGGLE ACTIVE STATUS
+// ------------------------------------------------------
+async function togglePlanStatus(id, userId) {
+  const planId = parseNumber(id);
+  if (!planId) throw new Error('Invalid plan ID');
 
-  const plan = await prisma.plan.findFirst({ where });
-  if (!plan) {
-    throw new Error('Plan not found');
-  }
+  const existing = await prisma.plan.findFirst({ where: { id: planId } });
+  if (!existing) throw new Error('Plan not found');
 
-  const updatedPlan = await prisma.plan.update({
-    where: { id: parseInt(id) },
-    data: { active: !plan.active },
+  const result = await prisma.plan.update({
+    where: { id: planId },
+    data: { active: !existing.active },
     include: {
-      admin: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-        },
-      },
-      branch: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
+      admin: { select: { id: true, firstName: true, lastName: true } },
+      branch: { select: { id: true, name: true } }
+    }
   });
 
-  logger.info(`Plan status toggled: ${updatedPlan.name} (ID: ${id}) - Active: ${updatedPlan.active} by user ${userId}`);
-  return updatedPlan;
-};
+  logger.info(`Plan status toggled: ${result.name} by user ${userId}`);
+  return result;
+}
 
-// Get booking requests
-const getBookingRequests = async (filters = {}) => {
-  const { branchId, status, planId } = filters;
-
+// ------------------------------------------------------
+// BOOKING REQUESTS
+// ------------------------------------------------------
+async function getBookingRequests(filters) {
   const where = {};
-  if (branchId) where.plan = { branchId: parseInt(branchId) };
-  if (status) where.status = status;
-  if (planId) where.planId = parseInt(planId);
 
-  return await prisma.planBooking.findMany({
-    where,
+  if (filters && filters.status) where.status = filters.status;
+  if (filters && filters.planId) where.planId = parseNumber(filters.planId);
+
+  return prisma.planBooking.findMany({
+    where: where,
     include: {
-      member: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
-      },
-      plan: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          sessions: true,
-          validity: true,
-          priceCents: true,
-          currency: true,
-        },
-      },
+      member: { select: { id: true, firstName: true, lastName: true, email: true } },
+      plan: { select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true, currency: true } }
     },
-    orderBy: { requestedAt: 'desc' },
+    orderBy: { requestedAt: 'desc' }
   });
-};
+}
 
-// Create booking request
-const createBookingRequest = async (bookingData, userId) => {
-  const { planId, note } = bookingData;
+// ------------------------------------------------------
+// MEMBER BOOKING REQUEST
+// ------------------------------------------------------
+async function createBookingRequest(data, userId) {
+  const planId = parseNumber(data.planId);
 
-  // Check if plan exists and is active
-  const plan = await prisma.plan.findUnique({
-    where: { id: parseInt(planId) },
+  const plan = await prisma.plan.findUnique({ where: { id: planId } });
+  if (!plan || !plan.active) throw new Error('Plan not found or inactive');
+
+  const duplicate = await prisma.planBooking.findFirst({
+    where: { memberId: parseNumber(userId), planId: planId, status: { in: ['pending', 'approved'] } }
   });
 
-  if (!plan || !plan.active) {
-    throw new Error('Plan not found or inactive');
-  }
+  if (duplicate) throw new Error('Booking already pending or approved');
 
-  // Check if member already has a pending/active booking for this plan
-  const existingBooking = await prisma.planBooking.findFirst({
-    where: {
-      memberId: parseInt(userId),
-      planId: parseInt(planId),
-      status: { in: ['pending', 'approved'] },
-    },
-  });
-
-  if (existingBooking) {
-    throw new Error('You already have a pending or approved booking for this plan');
-  }
-
-  const booking = await prisma.planBooking.create({
-    data: {
-      memberId: parseInt(userId),
-      planId: parseInt(planId),
-      status: 'pending',
-      note: note || null,
-    },
+  return prisma.planBooking.create({
+    data: { memberId: parseNumber(userId), planId: planId, status: 'pending', note: data.note || null },
     include: {
-      member: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
-      },
-      plan: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          sessions: true,
-          validity: true,
-          priceCents: true,
-          currency: true,
-        },
-      },
-    },
+      member: { select: { id: true, firstName: true, lastName: true, email: true } },
+      plan: { select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true, currency: true } }
+    }
   });
+}
 
-  logger.info(`Booking request created: Member ${userId} for plan ${planId}`);
-  return booking;
-};
+// ------------------------------------------------------
+// APPROVE BOOKING
+// ------------------------------------------------------
+async function approveBooking(id, userId) {
+  const bookingId = parseNumber(id);
 
-// Approve booking request
-const approveBooking = async (bookingId, userId) => {
   const booking = await prisma.planBooking.findUnique({
-    where: { id: parseInt(bookingId) },
-    include: { plan: true, member: true },
+    where: { id: bookingId },
+    include: { plan: true }
   });
 
-  if (!booking) {
-    throw new Error('Booking request not found');
-  }
+  if (!booking || booking.status !== 'pending') throw new Error('Booking request invalid');
 
-  if (booking.status !== 'pending') {
-    throw new Error('Booking request is not pending');
-  }
-
-  // Start transaction
-  const result = await prisma.$transaction(async (prisma) => {
-    // Update booking status
-    const updatedBooking = await prisma.planBooking.update({
-      where: { id: parseInt(bookingId) },
-      data: { status: 'approved' },
-      include: {
-        member: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        plan: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            sessions: true,
-            validity: true,
-            priceCents: true,
-            currency: true,
-          },
-        },
-      },
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.planBooking.update({
+      where: { id: bookingId },
+      data: { status: 'approved' }
     });
 
-    // Create member plan subscription
-    const startDate = new Date();
-    const expiryDate = new Date();
-    expiryDate.setDate(startDate.getDate() + booking.plan.validity);
+    const start = new Date();
+    const end = new Date();
+    end.setDate(start.getDate() + Number(booking.plan.validity));
 
-    await prisma.memberPlan.create({
+    await tx.memberPlan.create({
       data: {
         memberId: booking.memberId,
         planId: booking.planId,
-        startDate,
-        expiryDate,
-        remainingSessions: booking.plan.sessions,
-      },
+        startDate: start,
+        expiryDate: end,
+        remainingSessions: Number(booking.plan.sessions)
+      }
     });
 
-    return updatedBooking;
+    return tx.planBooking.findUnique({
+      where: { id: bookingId },
+      include: {
+        member: { select: { id: true, firstName: true, lastName: true, email: true } },
+        plan: { select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true, currency: true } }
+      }
+    });
   });
 
-  logger.info(`Booking approved: ID ${bookingId} by user ${userId}`);
+  logger.info(`Booking approved: ${id} by user ${userId}`);
   return result;
-};
+}
 
-// Reject booking request
-const rejectBooking = async (bookingId, userId) => {
+// ------------------------------------------------------
+// REJECT BOOKING
+// ------------------------------------------------------
+async function rejectBooking(id, userId) {
+  const bookingId = parseNumber(id);
+
   const booking = await prisma.planBooking.findUnique({
-    where: { id: parseInt(bookingId) },
+    where: { id: bookingId }
   });
 
-  if (!booking) {
-    throw new Error('Booking request not found');
-  }
+  if (!booking || booking.status !== 'pending') throw new Error('Booking request invalid');
 
-  if (booking.status !== 'pending') {
-    throw new Error('Booking request is not pending');
-  }
-
-  const updatedBooking = await prisma.planBooking.update({
-    where: { id: parseInt(bookingId) },
+  const result = await prisma.planBooking.update({
+    where: { id: bookingId },
     data: { status: 'rejected' },
     include: {
-      member: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
-      },
-      plan: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          sessions: true,
-          validity: true,
-          priceCents: true,
-          currency: true,
-        },
-      },
-    },
+      member: { select: { id: true, firstName: true, lastName: true, email: true } },
+      plan: { select: { id: true, name: true, type: true, sessions: true, validity: true, priceCents: true, currency: true } }
+    }
   });
 
-  logger.info(`Booking rejected: ID ${bookingId} by user ${userId}`);
-  return updatedBooking;
-};
+  logger.info(`Booking rejected: ${id} by user ${userId}`);
+  return result;
+}
 
-// Get distinct plan features (types)
-const getFeatures = async () => {
-  // Return a static list of common gym features
+// ------------------------------------------------------
+// STATIC FEATURES LIST
+// ------------------------------------------------------
+async function getFeatures() {
   return [
-    "Sauna",
-    "Group Classes",
-    "Personal Training",
-    "Locker Room",
-    "Cardio Access",
-    "Swimming Pool",
-    "Nutrition Counseling",
-    "Massage Therapy",
-    "Yoga Classes",
-    "Weight Training",
-    "CrossFit",
-    "Boxing",
-    "Martial Arts",
-    "Dance Classes",
-    "Pilates",
-    "Zumba",
-    "Spin Classes",
-    "Tennis Court",
-    "Basketball Court",
-    "Squash Court"
+    "Sauna", "Group Classes", "Personal Training", "Locker Room", "Cardio Access",
+    "Swimming Pool", "Nutrition Counseling", "Massage Therapy", "Yoga Classes",
+    "Weight Training", "CrossFit", "Boxing", "Martial Arts", "Dance Classes",
+    "Pilates", "Zumba", "Spin Classes", "Tennis Court", "Basketball Court", "Squash Court"
   ];
-};
+}
 
+// ------------------------------------------------------
 module.exports = {
   getAllPlans,
   getPlanById,
@@ -525,5 +337,5 @@ module.exports = {
   getBookingRequests,
   createBookingRequest,
   approveBooking,
-  rejectBooking,
+  rejectBooking
 };

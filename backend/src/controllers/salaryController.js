@@ -1,9 +1,12 @@
 const salaryService = require("../services/salaryService");
 const responseHandler = require("../utils/responseHandler");
 
+// ===============================
+// 📌 GET ALL SALARIES
+// ===============================
 const getSalaries = async (req, res, next) => {
   try {
-    const { userRole, userBranchId, isSuperAdmin } = req.accessFilters;
+    const { isSuperAdmin, userBranchId } = req.accessFilters;
 
     const salaries = isSuperAdmin
       ? await salaryService.getAllSalaries()
@@ -15,9 +18,16 @@ const getSalaries = async (req, res, next) => {
   }
 };
 
+// ===============================
+// 📌 GET SALARY BY ID
+// ===============================
 const getSalaryById = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
+
+    if (!id || isNaN(id)) {
+      return responseHandler.error(res, "Invalid salary ID", 400);
+    }
 
     const salary = await salaryService.getSalaryById(id);
 
@@ -31,13 +41,25 @@ const getSalaryById = async (req, res, next) => {
   }
 };
 
+// ===============================
+// 📌 CREATE SALARY RECORD
+// ===============================
 const createSalary = async (req, res, next) => {
   try {
-    const salaryData = { ...req.body };
-
+    const data = { ...req.body }; // keep safe immutable data
     const createdById = req.user.id;
 
-    const salary = await salaryService.createSalary(salaryData, createdById);
+    // Ensure branch is attached based on access filters
+    if (!data.branchId) {
+      data.branchId = req.accessFilters.userBranchId || null;
+    }
+
+    // Basic validation (we don't assume frontend correctness)
+    if (!data.staffId || !data.salaryType) {
+      return responseHandler.error(res, "Staff ID and salary type are required", 400);
+    }
+
+    const salary = await salaryService.createSalary(data, createdById);
 
     return responseHandler.success(res, "Salary record created successfully", { salary });
   } catch (error) {
@@ -45,12 +67,19 @@ const createSalary = async (req, res, next) => {
   }
 };
 
+// ===============================
+// 📌 UPDATE SALARY RECORD
+// ===============================
 const updateSalary = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const salaryData = { ...req.body };
+    const data = { ...req.body };
 
-    const salary = await salaryService.updateSalary(id, salaryData);
+    if (!id || isNaN(id)) {
+      return responseHandler.error(res, "Invalid salary ID", 400);
+    }
+
+    const salary = await salaryService.updateSalary(id, data);
 
     return responseHandler.success(res, "Salary record updated successfully", { salary });
   } catch (error) {
@@ -58,9 +87,16 @@ const updateSalary = async (req, res, next) => {
   }
 };
 
+// ===============================
+// 📌 DELETE SALARY RECORD
+// ===============================
 const deleteSalary = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
+
+    if (!id || isNaN(id)) {
+      return responseHandler.error(res, "Invalid salary ID", 400);
+    }
 
     const result = await salaryService.deleteSalary(id);
 

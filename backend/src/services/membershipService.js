@@ -1,51 +1,66 @@
-const { PrismaClient } = require('@prisma/client');
+"use strict";
+
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 // ----------------------------------------------------
-// 🔧 Helper: Format Date -> "Month DD, YYYY"
+// SAFE HELPERS (strict runtime validation)
 // ----------------------------------------------------
+const toInt = (val) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : null;
+};
+
+const toDate = (val) => {
+  if (!val) return null;
+  const parsed = new Date(val);
+  return !isNaN(parsed.valueOf()) ? parsed : null;
+};
+
+// Format Date into readable form
 const formatDate = (date) => {
-  if (!date) return null;
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
-  });
+  const d = toDate(date);
+  return d
+    ? d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : null;
 };
 
-// ----------------------------------------------------
-// 🔧 Helper: Convert numbers like "₹1000" or "1000" to cents
-// ----------------------------------------------------
-const parseAmountToCents = (amount) => {
+// Convert numbers like "₹1000" or "1000" to integer cents
+const toCents = (amount) => {
   if (!amount) return 0;
-  const clean = amount.toString().replace(/[₹,\s]/g, '');
-  return Math.round(parseFloat(clean) * 100);
+  const clean = amount.toString().replace(/[₹,\s]/g, "");
+  const value = parseFloat(clean);
+  return Number.isFinite(value) ? Math.round(value * 100) : 0;
 };
 
 // ----------------------------------------------------
-// 📌 GET ALL MEMBERSHIPS
+// GET ALL MEMBERSHIPS
 // ----------------------------------------------------
 const getAllMemberships = async (search, page, limit) => {
-  const skip = (page - 1) * limit;
+  const safePage = toInt(page) || 1;
+  const safeLimit = toInt(limit) || 10;
+  const skip = (safePage - 1) * safeLimit;
 
   const where = search
     ? {
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { title: { contains: search, mode: 'insensitive' } },
-        ],
+          { name: { contains: search, mode: "insensitive" } },
+          { title: { contains: search, mode: "insensitive" } }
+        ]
       }
     : {};
 
   const memberships = await prisma.membership.findMany({
     where,
     skip,
-    take: limit,
-    orderBy: { createdAt: 'desc' },
+    take: safeLimit,
+    orderBy: { createdAt: "desc" }
   });
 
   const total = await prisma.membership.count({ where });
 
   return {
-    memberships: memberships.map(m => ({
+    memberships: memberships.map((m) => ({
       id: m.id,
       title: m.title,
       name: m.name,
@@ -54,25 +69,25 @@ const getAllMemberships = async (search, page, limit) => {
       dueAmount: (m.dueAmount / 100).toString(),
       startDate: formatDate(m.startDate),
       endDate: formatDate(m.endDate),
-      paymentStatus: m.paymentStatus,
+      paymentStatus: m.paymentStatus
     })),
     pagination: {
-      page,
-      limit,
+      page: safePage,
+      limit: safeLimit,
       total,
-      totalPages: Math.ceil(total / limit),
-    },
+      totalPages: Math.ceil(total / safeLimit)
+    }
   };
 };
 
 // ----------------------------------------------------
-// 📌 GET MEMBERSHIP BY ID
+// GET MEMBERSHIP BY ID
 // ----------------------------------------------------
 const getMembershipById = async (id) => {
-  const m = await prisma.membership.findUnique({
-    where: { id: parseInt(id) },
-  });
+  const safeId = toInt(id);
+  if (!safeId) return null;
 
+  const m = await prisma.membership.findUnique({ where: { id: safeId } });
   if (!m) return null;
 
   return {
@@ -84,52 +99,59 @@ const getMembershipById = async (id) => {
     dueAmount: (m.dueAmount / 100).toString(),
     startDate: formatDate(m.startDate),
     endDate: formatDate(m.endDate),
-    paymentStatus: m.paymentStatus,
+    paymentStatus: m.paymentStatus
   };
 };
 
 // ----------------------------------------------------
-// 📌 CREATE MEMBERSHIP
+// CREATE MEMBERSHIP
 // ----------------------------------------------------
 const createMembership = async (data) => {
   return await prisma.membership.create({
     data: {
       ...data,
-      amount: parseAmountToCents(data.amount),
-      paidAmount: parseAmountToCents(data.paidAmount),
-      dueAmount: parseAmountToCents(data.dueAmount),
-    },
+      amount: toCents(data.amount),
+      paidAmount: toCents(data.paidAmount),
+      dueAmount: toCents(data.dueAmount)
+    }
   });
 };
 
 // ----------------------------------------------------
-// 📌 UPDATE MEMBERSHIP
+// UPDATE MEMBERSHIP
 // ----------------------------------------------------
 const updateMembership = async (id, data) => {
+  const safeId = toInt(id);
+  if (!safeId) return null;
+
   return await prisma.membership.update({
-    where: { id: parseInt(id) },
+    where: { id: safeId },
     data: {
       ...data,
-      amount: data.amount ? parseAmountToCents(data.amount) : undefined,
-      paidAmount: data.paidAmount ? parseAmountToCents(data.paidAmount) : undefined,
-      dueAmount: data.dueAmount ? parseAmountToCents(data.dueAmount) : undefined,
-    },
+      amount: data.amount ? toCents(data.amount) : undefined,
+      paidAmount: data.paidAmount ? toCents(data.paidAmount) : undefined,
+      dueAmount: data.dueAmount ? toCents(data.dueAmount) : undefined
+    }
   });
 };
 
 // ----------------------------------------------------
-// ❌ DELETE MEMBERSHIP
+// DELETE MEMBERSHIP
 // ----------------------------------------------------
 const deleteMembership = async (id) => {
-  return await prisma.membership.delete({
-    where: { id: parseInt(id) },
-  });
+  const safeId = toInt(id);
+  if (!safeId) return null;
+
+  return await prisma.membership.delete({ where: { id: safeId } });
 };
 
+// ----------------------------------------------------
+// EXPORTS
+// ----------------------------------------------------
 module.exports = {
   getAllMemberships,
   getMembershipById,
   createMembership,
   updateMembership,
-  deleteMembership,
+  deleteMembership
 };

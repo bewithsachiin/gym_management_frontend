@@ -1,11 +1,10 @@
-# TODO: API Integration for Account.jsx
+# TODO: Fix Staff Create/Update 400 Error
 
-## Tasks
-- [ ] Import axiosInstance and useEffect
-- [ ] Add loading, error, and initialData states
-- [ ] Implement fetchProfile function with useEffect
-- [ ] Update handleSaveMember to call update profile API
-- [ ] Update password change handler to call change password API
-- [ ] Remove mock data from initial states
-- [ ] Update reset handler to use initialData
-- [ ] Add loading indicators and error handling in UI
+## Issues Identified:
+1. **Field Name Mismatch**: Multer expects 'profile_photo' but client sends 'profilePhoto'.
+2. **JSON Parsing**: 'user' field is sent as JSON string but service expects object.
+
+## Tasks:
+- [ ] Update uploadMiddleware.js to use 'profilePhoto' instead of 'profile_photo'
+- [ ] Update staffController.js to parse 'user' field if it's a string
+- [ ] Test staff creation and update functionality

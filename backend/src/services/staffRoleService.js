@@ -1,6 +1,9 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// ----------------------------------------------------
+// 📌 GET ALL STAFF ROLES
+// ----------------------------------------------------
 const getAllStaffRoles = async () => {
   return prisma.staffRole.findMany({
     select: {
@@ -12,22 +15,29 @@ const getAllStaffRoles = async () => {
       createdAt: true,
       updatedAt: true,
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: "desc" }
   });
 };
 
+// ----------------------------------------------------
+// 📌 CREATE STAFF ROLE
+// ----------------------------------------------------
 const createStaffRole = async (data) => {
-  const { name, description, permissions, status } = data;
+  const name = data?.name ? String(data.name).trim() : "";
+  const description = data?.description ? String(data.description).trim() : null;
 
-  if (!name || name.trim() === "") {
+  // permissions must always be array
+  const permissions = Array.isArray(data?.permissions) ? data.permissions : [];
+
+  // allowed statuses
+  const status = data?.status === "Inactive" ? "Inactive" : "Active";
+
+  if (!name) {
     throw new Error("Role name is required");
   }
 
-  // prevent duplicate role names
-  const exists = await prisma.staffRole.findUnique({
-    where: { name },
-  });
-
+  // Prevent duplicate role names
+  const exists = await prisma.staffRole.findUnique({ where: { name } });
   if (exists) {
     throw new Error("Role name already exists");
   }
@@ -36,8 +46,8 @@ const createStaffRole = async (data) => {
     data: {
       name,
       description,
-      permissions: permissions || [],
-      status: status || "Active"
+      permissions,
+      status
     },
     select: {
       id: true,
@@ -47,27 +57,58 @@ const createStaffRole = async (data) => {
       status: true,
       createdAt: true,
       updatedAt: true,
-    },
+    }
   });
 };
 
+// ----------------------------------------------------
+// 📌 UPDATE STAFF ROLE
+// ----------------------------------------------------
 const updateStaffRole = async (id, data) => {
-  const { name, description, permissions, status } = data;
+  id = Number(id);
+  if (!id || isNaN(id)) {
+    throw new Error("Invalid role ID");
+  }
 
-  // Check for duplicate name if name is being updated
-  if (name) {
-    const exists = await prisma.staffRole.findFirst({
-      where: { name, id: { not: id } },
-    });
+  const role = await prisma.staffRole.findUnique({ where: { id } });
+  if (!role) {
+    throw new Error("Role not found");
+  }
 
-    if (exists) {
-      throw new Error("Role name already exists");
+  const updatedData = {};
+
+  // update name with unique check
+  if (data.name) {
+    const name = String(data.name).trim();
+    if (name) {
+      const exists = await prisma.staffRole.findFirst({
+        where: { name, id: { not: id } }
+      });
+      if (exists) {
+        throw new Error("Role name already exists");
+      }
+      updatedData.name = name;
     }
+  }
+
+  // update description if provided
+  if (data.description !== undefined) {
+    updatedData.description = data.description ? String(data.description).trim() : null;
+  }
+
+  // permissions must always be array
+  if (data.permissions !== undefined) {
+    updatedData.permissions = Array.isArray(data.permissions) ? data.permissions : [];
+  }
+
+  // enforce valid status
+  if (data.status !== undefined) {
+    updatedData.status = data.status === "Inactive" ? "Inactive" : "Active";
   }
 
   return prisma.staffRole.update({
     where: { id },
-    data: { name, description, permissions, status },
+    data: updatedData,
     select: {
       id: true,
       name: true,
@@ -76,51 +117,68 @@ const updateStaffRole = async (id, data) => {
       status: true,
       createdAt: true,
       updatedAt: true,
-    },
+    }
   });
 };
 
+// ----------------------------------------------------
+// 📌 DELETE STAFF ROLE
+// ----------------------------------------------------
 const deleteStaffRole = async (id) => {
-  // Check if role is being used by any staff
-  const staffCount = await prisma.staff.count({
-    where: { roleId: id },
-  });
+  id = Number(id);
+  if (!id || isNaN(id)) {
+    throw new Error("Invalid role ID");
+  }
 
+  // Do not delete roles assigned to staff members
+  const staffCount = await prisma.staff.count({ where: { roleId: id } });
   if (staffCount > 0) {
     throw new Error("Cannot delete role that is assigned to staff members");
   }
 
-  return prisma.staffRole.delete({
-    where: { id },
-  });
+  return prisma.staffRole.delete({ where: { id } });
 };
 
-// Function to check if a role has a specific permission
+// ----------------------------------------------------
+// 🔐 CHECK PERMISSION FOR A ROLE
+// ----------------------------------------------------
 const hasPermission = async (roleId, permission) => {
-  const role = await prisma.staffRole.findUnique({
-    where: { id: roleId },
-    select: { permissions: true, status: true }
-  });
-
-  if (!role || role.status !== 'Active') {
+  roleId = Number(roleId);
+  if (!roleId || isNaN(roleId)) {
     return false;
   }
 
-  return role.permissions && role.permissions.includes(permission);
-};
-
-// Function to get permissions for a role
-const getPermissionsByRoleId = async (roleId) => {
   const role = await prisma.staffRole.findUnique({
     where: { id: roleId },
     select: { permissions: true, status: true }
   });
 
-  if (!role || role.status !== 'Active') {
+  if (!role || role.status !== "Active") {
+    return false;
+  }
+
+  return Array.isArray(role.permissions) && role.permissions.includes(permission);
+};
+
+// ----------------------------------------------------
+// 🔐 GET PERMISSIONS BY ROLE
+// ----------------------------------------------------
+const getPermissionsByRoleId = async (roleId) => {
+  roleId = Number(roleId);
+  if (!roleId || isNaN(roleId)) {
     return [];
   }
 
-  return role.permissions || [];
+  const role = await prisma.staffRole.findUnique({
+    where: { id: roleId },
+    select: { permissions: true, status: true }
+  });
+
+  if (!role || role.status !== "Active") {
+    return [];
+  }
+
+  return Array.isArray(role.permissions) ? role.permissions : [];
 };
 
 module.exports = {

@@ -1,16 +1,39 @@
+// Simple Response Helper for Success and Error
+
 const responseHandler = {
-  success: (res, message, data = null, statusCode = 200) => {
+  
+  // Success Response
+  success: function (res, message, data, statusCode) {
+    // Default values (Entry Level Friendly)
+    if (!statusCode) {
+      statusCode = 200;
+    }
+    if (!message) {
+      message = "Success";
+    }
+    if (!data) {
+      data = null;
+    }
+
     res.status(statusCode).json({
       success: true,
-      message,
-      data,
+      message: message,
+      data: data,
     });
   },
 
-  error: (res, message, statusCode = 500) => {
+  // Error Response
+  error: function (res, message, statusCode) {
+    if (!statusCode) {
+      statusCode = 500;
+    }
+    if (!message) {
+      message = "Something went wrong";
+    }
+
     res.status(statusCode).json({
       success: false,
-      message,
+      message: message,
     });
   },
 };

@@ -1,10 +1,49 @@
-const { PrismaClient } = require('@prisma/client');
-const cloudinary = require('../config/cloudinary');
+"use strict";
+
+const { PrismaClient } = require("@prisma/client");
+const cloudinary = require("../config/cloudinary");
 
 const prisma = new PrismaClient();
 
+// ---------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------
+
+const toInt = (v) => {
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+};
+
+const mapStatus = (status) => {
+  switch (status) {
+    case "Active":
+      return "ACTIVE";
+    case "Inactive":
+      return "INACTIVE";
+    case "Maintenance":
+      return "MAINTENANCE";
+    default:
+      return "INACTIVE";
+  }
+};
+
+const removeOldImage = async (existingImage) => {
+  if (!existingImage) return;
+  try {
+    const publicId = existingImage.split("/").pop().split(".")[0];
+    if (publicId) {
+      await cloudinary.uploader.destroy(publicId);
+    }
+  } catch {
+    // Silent catch avoids crashing on invalid public IDs
+  }
+};
+
+// ---------------------------------------------------------
+// Get All Branches
+// ---------------------------------------------------------
 const getAllBranches = async () => {
-  return await prisma.branch.findMany({
+  return prisma.branch.findMany({
     select: {
       id: true,
       name: true,
@@ -18,20 +57,10 @@ const getAllBranches = async () => {
       createdAt: true,
       updatedAt: true,
       admin: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
+        select: { id: true, firstName: true, lastName: true, email: true }
       },
       createdBy: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
+        select: { id: true, firstName: true, lastName: true, email: true }
       },
       settings: {
         select: {
@@ -40,13 +69,16 @@ const getAllBranches = async () => {
           notifications_enabled: true,
           sms_notifications_enabled: true,
           in_app_notifications_enabled: true,
-          notification_message: true,
-        },
-      },
-    },
+          notification_message: true
+        }
+      }
+    }
   });
 };
 
+// ---------------------------------------------------------
+// Create Branch (with nested settings + admin linking)
+// ---------------------------------------------------------
 const createBranch = async (data, createdById) => {
   const {
     name,
@@ -66,36 +98,28 @@ const createBranch = async (data, createdById) => {
     notification_message
   } = data;
 
-  // adminId is now optional
-  let adminIdValue = null;
+  // Validate admin if provided
+  let adminToAssign = null;
   if (adminId) {
-    // Check if admin exists and is role 'admin' or 'superadmin'
     const admin = await prisma.user.findUnique({
-      where: { id: parseInt(adminId) },
+      where: { id: toInt(adminId) }
     });
 
-    if (!admin) {
-      throw new Error('Admin user not found');
+    if (!admin) throw new Error("Admin user not found");
+    if (!["admin", "superadmin"].includes(admin.role)) {
+      throw new Error("Assigned user must be an admin or superadmin");
+    }
+    if (admin.role === "admin" && admin.branchId) {
+      throw new Error("Admin is already assigned to a branch");
     }
 
-    if (!['admin', 'superadmin'].includes(admin.role)) {
-      throw new Error('Assigned user must be an admin or superadmin');
-    }
-
-    // Check if admin already has a branch (only for regular admins, superadmin can have multiple)
-    if (admin.role === 'admin' && admin.branchId) {
-      throw new Error('Admin is already assigned to a branch');
-    }
-
-    adminIdValue = parseInt(adminId);
+    adminToAssign = admin;
   }
 
-  // Map status to enum
-  const statusEnum = status === 'Active' ? 'ACTIVE' : status === 'Inactive' ? 'INACTIVE' : status === 'Maintenance' ? 'MAINTENANCE' : 'INACTIVE';
+  const statusEnum = mapStatus(status);
 
-  // Create branch and update admin's branchId in transaction
-  const result = await prisma.$transaction(async (prisma) => {
-    const branch = await prisma.branch.create({
+  return prisma.$transaction(async (tx) => {
+    const branch = await tx.branch.create({
       data: {
         name,
         code,
@@ -104,9 +128,9 @@ const createBranch = async (data, createdById) => {
         email,
         status: statusEnum,
         hours,
-        branch_image,
-        adminId: adminIdValue,
-        createdById: createdById ? parseInt(createdById) : null,
+        branchImage: branch_image,
+        adminId: adminToAssign ? adminToAssign.id : null,
+        createdById: createdById ? toInt(createdById) : null,
         settings: {
           create: {
             operatingHours,
@@ -114,9 +138,9 @@ const createBranch = async (data, createdById) => {
             notifications_enabled,
             sms_notifications_enabled,
             in_app_notifications_enabled,
-            notification_message,
-          },
-        },
+            notification_message
+          }
+        }
       },
       select: {
         id: true,
@@ -131,12 +155,7 @@ const createBranch = async (data, createdById) => {
         createdAt: true,
         updatedAt: true,
         createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+          select: { id: true, firstName: true, lastName: true, email: true }
         },
         settings: {
           select: {
@@ -145,26 +164,27 @@ const createBranch = async (data, createdById) => {
             notifications_enabled: true,
             sms_notifications_enabled: true,
             in_app_notifications_enabled: true,
-            notification_message: true,
-          },
-        },
-      },
+            notification_message: true
+          }
+        }
+      }
     });
 
-    // Update admin's branchId (only for regular admins, superadmin doesn't need branchId update)
-    if (adminIdValue && admin.role === 'admin') {
-      await prisma.user.update({
-        where: { id: adminIdValue },
-        data: { branchId: branch.id },
+    // Update admin's branch (admin only, not superadmin)
+    if (adminToAssign && adminToAssign.role === "admin") {
+      await tx.user.update({
+        where: { id: adminToAssign.id },
+        data: { branchId: branch.id }
       });
     }
 
     return branch;
   });
-
-  return result;
 };
 
+// ---------------------------------------------------------
+// Update Branch (replace image + upsert settings)
+// ---------------------------------------------------------
 const updateBranch = async (id, data) => {
   const {
     name,
@@ -183,91 +203,50 @@ const updateBranch = async (id, data) => {
     notification_message
   } = data;
 
-  // Map status to enum
-  const statusEnum = status === 'Active' ? 'ACTIVE' : status === 'Inactive' ? 'INACTIVE' : status === 'Maintenance' ? 'MAINTENANCE' : 'INACTIVE';
+  const branchId = toInt(id);
+  if (!branchId) throw new Error("Invalid branch ID");
 
-  const updateData = {
-    name,
-    code,
-    address,
-    phone,
-    email,
-    status: statusEnum,
-        hours,
-        branchImage: branch_image,
-        settings: {
-      upsert: {
-        create: {
-          operatingHours,
-          holidays,
-          notifications_enabled,
-          sms_notifications_enabled,
-          in_app_notifications_enabled,
-          notification_message,
-        },
-        update: {
-          operatingHours,
-          holidays,
-          notifications_enabled,
-          sms_notifications_enabled,
-          in_app_notifications_enabled,
-          notification_message,
-        },
-      },
-    },
-  };
-
-  // If new image, delete old one from Cloudinary
+  // Remove old branch image if new provided
   if (branch_image) {
-    const existingBranch = await prisma.branch.findUnique({ where: { id: parseInt(id) } });
-    if (existingBranch && existingBranch.branch_image) {
-      const publicId = existingBranch.branchImage.split('/').pop().split('.')[0];
-      await cloudinary.uploader.destroy(publicId);
-    }
+    const existing = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { branchImage: true }
+    });
+    if (existing?.branchImage) await removeOldImage(existing.branchImage);
   }
 
-  return await prisma.branch.update({
-    where: { id: parseInt(id) },
-    data: updateData,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        address: true,
-        phone: true,
-        email: true,
-        status: true,
-        hours: true,
-        branchImage: true,
-        createdAt: true,
-        updatedAt: true,
-        settings: {
-        select: {
-          operatingHours: true,
-          holidays: true,
-          notifications_enabled: true,
-          sms_notifications_enabled: true,
-          in_app_notifications_enabled: true,
-          notification_message: true,
-        },
-      },
+  return prisma.branch.update({
+    where: { id: branchId },
+    data: {
+      name,
+      code,
+      address,
+      phone,
+      email,
+      status: mapStatus(status),
+      hours,
+      branchImage: branch_image,
+      settings: {
+        upsert: {
+          create: {
+            operatingHours,
+            holidays,
+            notifications_enabled,
+            sms_notifications_enabled,
+            in_app_notifications_enabled,
+            notification_message
+          },
+          update: {
+            operatingHours,
+            holidays,
+            notifications_enabled,
+            sms_notifications_enabled,
+            in_app_notifications_enabled,
+            notification_message
+          }
+        }
+      }
     },
-  });
-};
-
-const deleteBranch = async (id) => {
-  const branch = await prisma.branch.findUnique({ where: { id: parseInt(id) } });
-  if (branch && branch.branchImage) {
-    const publicId = branch.branchImage.split('/').pop().split('.')[0];
-    await cloudinary.uploader.destroy(publicId);
-  }
-
-  await prisma.branch.delete({ where: { id: parseInt(id) } });
-};
-
-const getBranchById = async (id) => {
-  return await prisma.branch.findUnique({
-    where: { id: parseInt(id) },
     select: {
       id: true,
       name: true,
@@ -280,22 +259,69 @@ const getBranchById = async (id) => {
       branchImage: true,
       createdAt: true,
       updatedAt: true,
-    },
+      settings: {
+        select: {
+          operatingHours: true,
+          holidays: true,
+          notifications_enabled: true,
+          sms_notifications_enabled: true,
+          in_app_notifications_enabled: true,
+          notification_message: true
+        }
+      }
+    }
   });
 };
 
-const getAvailableAdmins = async () => {
-  return await prisma.user.findMany({
-    where: {
-      role: 'admin',
-      branchId: null, // Only admins not assigned to any branch
-    },
+// ---------------------------------------------------------
+// Delete Branch (remove cloud image)
+// ---------------------------------------------------------
+const deleteBranch = async (id) => {
+  const branchId = toInt(id);
+  if (!branchId) throw new Error("Invalid branch ID");
+
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { branchImage: true }
+  });
+
+  if (branch?.branchImage) await removeOldImage(branch.branchImage);
+
+  await prisma.branch.delete({ where: { id: branchId } });
+};
+
+// ---------------------------------------------------------
+// Get Branch by ID
+// ---------------------------------------------------------
+const getBranchById = async (id) => {
+  return prisma.branch.findUnique({
+    where: { id: toInt(id) },
     select: {
       id: true,
-      firstName: true,
-      lastName: true,
+      name: true,
+      code: true,
+      address: true,
+      phone: true,
       email: true,
+      status: true,
+      hours: true,
+      branchImage: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  });
+};
+
+// ---------------------------------------------------------
+// List Admins available for assigning to new branches
+// ---------------------------------------------------------
+const getAvailableAdmins = async () => {
+  return prisma.user.findMany({
+    where: {
+      role: "admin",
+      branchId: null
     },
+    select: { id: true, firstName: true, lastName: true, email: true }
   });
 };
 
@@ -305,5 +331,5 @@ module.exports = {
   createBranch,
   updateBranch,
   deleteBranch,
-  getAvailableAdmins,
+  getAvailableAdmins
 };

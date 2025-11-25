@@ -1,233 +1,228 @@
-const branchPlanService = require('../services/branchPlanService');
-const responseHandler = require('../utils/responseHandler');
+"use strict";
 
-// Get all branch plans
+const branchPlanService = require("../services/branchPlanService");
+const responseHandler = require("../utils/responseHandler");
+
+// ---------------------------------------------------------
+// STRICT SAFE HELPERS
+// ---------------------------------------------------------
+
+// Parse body safely (protects from undefined/null)
+const safeBody = (body) => (body && typeof body === "object" ? body : {});
+
+// Enforce numeric ID for all services
+const parseId = (value) => {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
+// ---------------------------------------------------------
+// CONTROLLERS
+// ---------------------------------------------------------
+
 const getBranchPlans = async (req, res, next) => {
-  console.log("\n🟦 [Controller] getBranchPlans() triggered");
-
   try {
     const { userRole, userBranchId } = req.accessFilters;
     const filters = { ...req.query, ...req.queryFilters };
 
-    console.log("🔎 Access Filters:", { userRole, userBranchId });
-    console.log("📥 Filters Received:", filters);
+    const plans = await branchPlanService.getAllBranchPlans(
+      filters,
+      userBranchId,
+      userRole
+    );
 
-    console.log("📡 Calling Service: getAllBranchPlans()");
-    const plans = await branchPlanService.getAllBranchPlans(filters, userBranchId, userRole);
-
-    console.log(`📦 Plans Retrieved: ${plans?.length}`);
-    responseHandler.success(res, 'Branch plans fetched successfully', { plans });
+    return responseHandler.success(res, "Branch plans fetched successfully", { plans });
 
   } catch (error) {
-    console.error("❌ [Controller Error] getBranchPlans():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Get branch plan by ID
 const getBranchPlan = async (req, res, next) => {
-  console.log("\n🟨 [Controller] getBranchPlan() triggered");
-
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid plan ID", 400);
+
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("🔐 Plan ID:", id);
-    console.log("🔎 Access Filters:", { userRole, userBranchId });
-    
-    console.log("📡 Calling Service: getBranchPlanById()");
-    const plan = await branchPlanService.getBranchPlanById(id, userBranchId, userRole);
+    const plan = await branchPlanService.getBranchPlanById(
+      id,
+      userBranchId,
+      userRole
+    );
 
-    if (!plan) {
-      console.log("⛔ No plan found with ID:", id);
-      return responseHandler.error(res, 'Branch plan not found', 404);
-    }
+    if (!plan) return responseHandler.error(res, "Branch plan not found", 404);
 
-    console.log("📦 Plan Retrieved:", plan?.id);
-    responseHandler.success(res, 'Branch plan fetched successfully', { plan });
+    return responseHandler.success(res, "Branch plan fetched successfully", { plan });
 
   } catch (error) {
-    console.error("❌ [Controller Error] getBranchPlan():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Create new branch plan
 const createBranchPlan = async (req, res, next) => {
-  console.log("\n🟩 [Controller] createBranchPlan() triggered");
-
   try {
-    const planData = req.body;
-    const { id: userId, branchId, role } = req.user;
+    const data = safeBody(req.body);
+    const { id: userId } = req.user;
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("📥 Plan Data:", planData);
-    console.log("🧑 User Context:", { userId, branchId, role });
-    console.log("🔎 Access Filters:", { userRole, userBranchId });
+    const plan = await branchPlanService.createBranchPlan(
+      data,
+      userId,
+      userBranchId,
+      userRole
+    );
 
-    console.log("📡 Calling Service: createBranchPlan()");
-    const plan = await branchPlanService.createBranchPlan(planData, userId, userBranchId, userRole);
-
-    console.log("🎉 Branch Plan Created:", plan?.id);
-    responseHandler.success(res, 'Branch plan created successfully', { plan }, 201);
+    return responseHandler.success(res, "Branch plan created successfully", { plan }, 201);
 
   } catch (error) {
-    console.error("❌ [Controller Error] createBranchPlan():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Update branch plan
 const updateBranchPlan = async (req, res, next) => {
-  console.log("\n🟦 [Controller] updateBranchPlan() triggered");
-
   try {
-    const { id } = req.params;
-    const planData = req.body;
-    const { id: userId, branchId, role } = req.user;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid plan ID", 400);
+
+    const data = safeBody(req.body);
+    const { id: userId } = req.user;
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("🔐 Plan ID:", id);
-    console.log("📥 Update Data:", planData);
-    console.log("🧑 User Context:", { userId, branchId, role });
-    console.log("🔎 Access Filters:", { userRole, userBranchId });
+    const plan = await branchPlanService.updateBranchPlan(
+      id,
+      data,
+      userId,
+      userBranchId,
+      userRole
+    );
 
-    console.log("📡 Calling Service: updateBranchPlan()");
-    const plan = await branchPlanService.updateBranchPlan(id, planData, userId, userBranchId, userRole);
-
-    console.log("♻️ Branch Plan Updated:", plan?.id);
-    responseHandler.success(res, 'Branch plan updated successfully', { plan });
+    return responseHandler.success(res, "Branch plan updated successfully", { plan });
 
   } catch (error) {
-    console.error("❌ [Controller Error] updateBranchPlan():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Delete branch plan
 const deleteBranchPlan = async (req, res, next) => {
-  console.log("\n🟥 [Controller] deleteBranchPlan() triggered");
-
   try {
-    const { id } = req.params;
-    const { id: userId, branchId, role } = req.user;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid plan ID", 400);
+
+    const { id: userId } = req.user;
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("🧹 Delete Plan ID:", id);
-    console.log("🧑 User Context:", { userId, branchId, role });
-
-    console.log("📡 Calling Service: deleteBranchPlan()");
     await branchPlanService.deleteBranchPlan(id, userId, userBranchId, userRole);
 
-    console.log("🗑️ Branch Plan Deleted Successfully");
-    responseHandler.success(res, 'Branch plan deleted successfully');
+    return responseHandler.success(res, "Branch plan deleted successfully");
 
   } catch (error) {
-    console.error("❌ [Controller Error] deleteBranchPlan():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Toggle branch plan status
 const toggleBranchPlanStatus = async (req, res, next) => {
-  console.log("\n🔁 [Controller] toggleBranchPlanStatus() triggered");
-
   try {
-    const { id } = req.params;
-    const { id: userId, branchId, role } = req.user;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid plan ID", 400);
+
+    const { id: userId } = req.user;
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("🔐 Plan ID:", id);
-    console.log("🧑 User Context:", { userId, branchId, role });
+    const plan = await branchPlanService.toggleBranchPlanStatus(
+      id,
+      userId,
+      userBranchId,
+      userRole
+    );
 
-    console.log("📡 Calling Service: toggleBranchPlanStatus()");
-    const plan = await branchPlanService.toggleBranchPlanStatus(id, userId, userBranchId, userRole);
-
-    console.log("🔄 Status Toggled for:", plan?.id);
-    responseHandler.success(res, 'Branch plan status updated successfully', { plan });
+    return responseHandler.success(res, "Branch plan status updated successfully", { plan });
 
   } catch (error) {
-    console.error("❌ [Controller Error] toggleBranchPlanStatus():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Get branch booking requests
 const getBranchBookingRequests = async (req, res, next) => {
-  console.log("\n📩 [Controller] getBranchBookingRequests() triggered");
-
   try {
     const { userRole, userBranchId } = req.accessFilters;
 
-    console.log("🔎 Access Filters:", { userRole, userBranchId });
-    console.log("📡 Calling Service: getBranchBookingRequests()");
-    const bookings = await branchPlanService.getBranchBookingRequests(userBranchId, userRole);
+    const bookings = await branchPlanService.getBranchBookingRequests(
+      userBranchId,
+      userRole
+    );
 
-    console.log(`📦 Booking Requests Retrieved: ${bookings?.length}`);
-    responseHandler.success(res, 'Branch booking requests fetched successfully', { bookings });
+    return responseHandler.success(res, "Branch booking requests fetched successfully", { bookings });
 
   } catch (error) {
-    console.error("❌ [Controller Error] getBranchBookingRequests():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Approve branch booking
 const approveBranchBooking = async (req, res, next) => {
-  console.log("\n🟢 [Controller] approveBranchBooking() triggered");
-
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid booking ID", 400);
+
     const { id: userId, role } = req.user;
-
-    console.log("🔐 Booking ID:", id);
-    console.log("🧑 User Role:", role);
-
-    if (!['superadmin', 'admin'].includes(role)) {
-      console.warn("⛔ User lacks permission to approve");
-      return responseHandler.error(res, 'Insufficient permissions', 403);
+    if (!["superadmin", "admin"].includes(role)) {
+      return responseHandler.error(res, "Insufficient permissions", 403);
     }
 
-    console.log("📡 Calling Service: approveBranchBooking()");
     const booking = await branchPlanService.approveBranchBooking(id, userId);
 
-    console.log("✔️ Booking Approved:", booking?.id);
-    responseHandler.success(res, 'Branch booking approved successfully', { booking });
+    return responseHandler.success(res, "Branch booking approved successfully", { booking });
 
   } catch (error) {
-    console.error("❌ [Controller Error] approveBranchBooking():", error);
-    next(error);
+    return next(error);
   }
 };
 
-// Reject branch booking request
 const rejectBranchBooking = async (req, res, next) => {
-  console.log("\n🔴 [Controller] rejectBranchBooking() triggered");
-
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id);
+    if (!id) return responseHandler.error(res, "Invalid booking ID", 400);
+
     const { id: userId, role } = req.user;
-
-    console.log("🔐 Booking ID:", id);
-    console.log("🧑 User Role:", role);
-
-    if (!['superadmin', 'admin'].includes(role)) {
-      console.warn("⛔ User lacks permission to reject");
-      return responseHandler.error(res, 'Insufficient permissions', 403);
+    if (!["superadmin", "admin"].includes(role)) {
+      return responseHandler.error(res, "Insufficient permissions", 403);
     }
 
-    console.log("📡 Calling Service: rejectBranchBooking()");
     const booking = await branchPlanService.rejectBranchBooking(id, userId);
 
-    console.log("❌ Booking Rejected:", booking?.id);
-    responseHandler.success(res, 'Branch booking rejected successfully', { booking });
+    return responseHandler.success(res, "Branch booking rejected successfully", { booking });
 
   } catch (error) {
-    console.error("❌ [Controller Error] rejectBranchBooking():", error);
-    next(error);
+    return next(error);
   }
 };
 
+// ---------------------------------------------------------
+// CREATE BOOKING REQUEST
+// ---------------------------------------------------------
+const createBranchPlanBookingRequest = async (req, res, next) => {
+  try {
+    const data = safeBody(req.body);
+    const { id: userId } = req.user;
+    const { userRole, userBranchId } = req.accessFilters;
+
+    const booking = await branchPlanService.createBranchPlanBookingRequest(
+      data,
+      userId,
+      userBranchId,
+      userRole
+    );
+
+    return responseHandler.success(res, "Branch plan booking request created successfully", { booking }, 201);
+
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// ---------------------------------------------------------
+// EXPORTS
+// ---------------------------------------------------------
 module.exports = {
   getBranchPlans,
   getBranchPlan,
@@ -238,4 +233,5 @@ module.exports = {
   getBranchBookingRequests,
   approveBranchBooking,
   rejectBranchBooking,
+  createBranchPlanBookingRequest,
 };

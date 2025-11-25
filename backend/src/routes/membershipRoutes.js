@@ -1,63 +1,63 @@
-const express = require('express');
+"use strict";
+
+const express = require("express");
 const router = express.Router();
 
-const membershipController = require('../controllers/membershipController');
+const membershipController = require("../controllers/membershipController");
 
 // Middlewares
-const { authenticateToken } = require('../middlewares/auth.middleware');
-const { accessControl, checkPermission } = require('../middlewares/accessControl.middleware');
+const { authenticateToken } = require("../middlewares/auth.middleware");
+const { accessControl, checkPermission } = require("../middlewares/accessControl.middleware");
 
-// =====================================================
-// 🔎 DEBUG Helper (Never change business logic)
-// =====================================================
-const debugRoute = (label) => (req, res, next) => {
-  console.log(`\n📍 [MEMBERSHIP ROUTE] ${label}`);
-  console.log("👤 User:", req.user ? {
-    id: req.user.id,
-    role: req.user.role,
-    branchId: req.user.branchId
-  } : "Unauthenticated");
-  console.log("🏢 Filters:", req.accessFilters || "No Branch Filter");
-  console.log("📎 Params:", req.params);
-  console.log("📎 Query:", req.query);
-  console.log("📎 Body:", req.body);
+// ---------------------------------------------------------
+// ID VALIDATION (Strict runtime numeric type)
+// ---------------------------------------------------------
+const validateNumericId = (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!id || Number.isNaN(id) || id <= 0) {
+    return res.status(400).json({
+      status: false,
+      message: "Invalid membership ID. Expected a positive number."
+    });
+  }
+  req.params.id = id; // convert safely to number for controller
   next();
 };
 
-// =====================================================
-// 🔐 ROUTE GUARDS
-// =====================================================
+// ---------------------------------------------------------
+// ROUTE GUARDS (same logic as original)
+// ---------------------------------------------------------
 
-// 🟨 Any logged in user WITH branch filtering (like trainers/receptionist)
+// Logged-in users with branch filtering
 const protect = [
   authenticateToken,
   accessControl()
 ];
 
-// 🟥 Only superadmin + admin can Add/Edit/Delete
+// Only Admin + Superadmin can create/update/delete
 const adminOnly = [
   authenticateToken,
   accessControl(),
-  checkPermission(['superadmin', 'admin'])
+  checkPermission(["superadmin", "admin"])
 ];
 
-// =====================================================
-// 📌 MEMBERSHIP ROUTES
-// =====================================================
+// ---------------------------------------------------------
+// MEMBERSHIP ROUTES (logic unchanged)
+// ---------------------------------------------------------
 
-// 📌 Get all memberships (filtered for non-superadmin)
-router.get('/', debugRoute("GET ALL MEMBERSHIPS"), protect, membershipController.getAllMemberships);
+// Get all memberships (branch filtered automatically)
+router.get("/", protect, membershipController.getAllMemberships);
 
-// 📌 Get membership by ID (filtered for non-superadmin)
-router.get('/:id', debugRoute("GET MEMBERSHIP BY ID"), protect, membershipController.getMembershipById);
+// Get membership by ID (branch filtered automatically)
+router.get("/:id", protect, validateNumericId, membershipController.getMembershipById);
 
-// 📌 Create membership (only admins/superadmins)
-router.post('/', debugRoute("CREATE MEMBERSHIP"), adminOnly, membershipController.createMembership);
+// Create membership (admin only)
+router.post("/", adminOnly, membershipController.createMembership);
 
-// 📌 Update membership (only admins/superadmins)
-router.put('/:id', debugRoute("UPDATE MEMBERSHIP"), adminOnly, membershipController.updateMembership);
+// Update membership (admin only)
+router.put("/:id", adminOnly, validateNumericId, membershipController.updateMembership);
 
-// 📌 Delete membership (only admins/superadmins)
-router.delete('/:id', debugRoute("DELETE MEMBERSHIP"), adminOnly, membershipController.deleteMembership);
+// Delete membership (admin only)
+router.delete("/:id", adminOnly, validateNumericId, membershipController.deleteMembership);
 
 module.exports = router;

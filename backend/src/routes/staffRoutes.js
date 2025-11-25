@@ -1,12 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const staffController = require("../controllers/staffController");
 
+const staffController = require("../controllers/staffController");
 const { staffUpload } = require("../middlewares/uploadMiddleware");
 const { authenticateToken } = require("../middlewares/auth.middleware");
 const { accessControl, checkPermission } = require("../middlewares/accessControl.middleware");
 
-// Get all staff
+/*
+  Routes:
+  - GET    /api/v1/staff       -> list staff
+  - POST   /api/v1/staff       -> create staff (with photo)
+  - PUT    /api/v1/staff/:id   -> update staff (with photo)
+  - DELETE /api/v1/staff/:id   -> delete staff
+*/
+
+// List staff (requires authentication + branch access rules)
 router.get(
   "/",
   authenticateToken,
@@ -14,7 +22,7 @@ router.get(
   staffController.getStaff
 );
 
-// Create staff
+// Create staff (only superadmin/admin) + file upload
 router.post(
   "/",
   authenticateToken,
@@ -24,7 +32,7 @@ router.post(
   staffController.createStaff
 );
 
-// Update staff
+// Update staff (only superadmin/admin) + file upload
 router.put(
   "/:id",
   authenticateToken,
@@ -34,7 +42,7 @@ router.put(
   staffController.updateStaff
 );
 
-// Delete staff
+// Delete staff (only superadmin/admin)
 router.delete(
   "/:id",
   authenticateToken,
